@@ -1,0 +1,54 @@
+Name     J-II_EXP ;
+PartNo   xx ;
+Date     06/08/2020 ;
+Revision 01 ;
+Designer Ricardo F. Lopes ;
+Company   ;
+Assembly None ;
+Location U1;
+Device   G22V10 ;
+
+/* *************** INPUT PINS ******************** */
+PIN  1 = !MREQ ;  /* CPU -MREQ line */
+PIN  2 = !IORQ ;  /* CPU -IORQ line */
+PIN  3 = !WR ;    /* CPU -WR line */
+PIN  4 = A15 ;    /* CPU Address line */
+PIN  5 = A14 ;    /* CPU Address line */
+PIN  6 = A7 ;     /* CPU Address line */
+PIN  7 = A6 ;     /* CPU Address line */
+PIN  8 = A5 ;     /* CPU Address line */
+PIN  9 = A4 ;     /* CPU Address line */
+PIN 10 = A1 ;     /* CPU Address line */
+PIN 11 = A0 ;     /* CPU Address line */
+                  /* PIN 12 = GND */
+PIN 13 = !RESET ; /* CPU -RESET line */
+PIN 14 = XPAGE1 ; /* Memory expansion page select bit-1 */
+PIN 15 = XPAGE0 ; /* Memory expansion page select bit-0 */
+
+/* *************** OUTPUT PINS ******************** */
+                   /* pin 24 = VCC */
+PIN 23 = UARTRST ; /* UART reset */
+PIN 22 = !UART ;   /* UART enable */
+PIN 21 = XA15 ;    /* Memory expansion address line */
+PIN 20 = XA16 ;    /* Memory expansion address line */
+PIN 19 = !XRAM ;   /* RAM expansion enable */
+PIN 18 = !XROM ;   /* ROM expansion enable */
+PIN 17 = PSGBDIR ; /* Programmable Sound Generator BDIR line */
+PIN 16 = PSGBC1 ;  /* Programmable Sound Generator BC1 line */
+
+/* _______________ EQUATIONS ___________________ */
+
+/* ======= Memory Expansion: [4000-FFFF] ======= */
+XROM = MREQ & !XPAGE1 & !XPAGE0 & A15 & A14 ; /* ROM: C000-FFFF */
+XRAM = MREQ & (A14 # A15) & !XROM ;           /* RAM: 4000-FFFF */
+XA15 = XPAGE0 & A15 ;
+XA16 = XPAGE1 & A15 ;
+
+/* ======= Programmable Sound Generator: I/O odd[F1-FF] ======= */
+PSG     = IORQ & A7 & A6 & A5 & A4 & A0; /* PSG: I/O @ 1111 xxx1 */
+PSGBDIR = PSG & WR;
+PSGBC1  = PSG & (WR $ A1);
+
+/* ======= Serial Interface: odd I/O [E1..EF] ======= */
+UART    = IORQ & A7 & A6 & A5 & !A4 & A0 ; /* UART: I/O @ 1110 xxx1 */
+UARTRST = RESET ;
