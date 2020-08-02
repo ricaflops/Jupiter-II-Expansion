@@ -4,7 +4,8 @@ An Expansion board for the [Jupiter-II](https://github.com/ricaflops/Jupiter-II)
 ![Jupiter-II Expansion KiCAD 3D view](Jupiter-II_expansion.jpg)
 
 ## Important
-Work in progress. initiating hardware tests
+Work in progress.
+Hardware validated. Working in the firmware now.
 
 ## Expands Jupiter-II with:
 - 128K RAM memory
