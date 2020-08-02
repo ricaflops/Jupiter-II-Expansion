@@ -9,9 +9,9 @@ Location U1;
 Device   G22V10 ;
 
 /* *************** INPUT PINS ******************** */
-PIN  1 = !MREQ ;  /* CPU -MREQ line */
-PIN  2 = !IORQ ;  /* CPU -IORQ line */
-PIN  3 = !WR ;    /* CPU -WR line */
+PIN  1 = !MREQ ;  /* CPU -MREQ */
+PIN  2 = !IORQ ;  /* CPU -IORQ */
+PIN  3 = !WR ;    /* CPU -WR */
 PIN  4 = A15 ;    /* CPU Address line */
 PIN  5 = A14 ;    /* CPU Address line */
 PIN  6 = A7 ;     /* CPU Address line */
@@ -21,7 +21,7 @@ PIN  9 = A4 ;     /* CPU Address line */
 PIN 10 = A1 ;     /* CPU Address line */
 PIN 11 = A0 ;     /* CPU Address line */
                   /* PIN 12 = GND */
-PIN 13 = !RESET ; /* CPU -RESET line */
+PIN 13 = !RESET ; /* CPU -RESET */
 PIN 14 = XPAGE1 ; /* Memory expansion page select bit-1 */
 PIN 15 = XPAGE0 ; /* Memory expansion page select bit-0 */
 
@@ -33,22 +33,45 @@ PIN 21 = XA15 ;    /* Memory expansion address line */
 PIN 20 = XA16 ;    /* Memory expansion address line */
 PIN 19 = !XRAM ;   /* RAM expansion enable */
 PIN 18 = !XROM ;   /* ROM expansion enable */
-PIN 17 = PSGBDIR ; /* Programmable Sound Generator BDIR line */
-PIN 16 = PSGBC1 ;  /* Programmable Sound Generator BC1 line */
+PIN 17 = PSGBDIR ; /* PSG BDIR */
+PIN 16 = PSGBC1 ;  /* PSG BC1 */
 
 /* _______________ EQUATIONS ___________________ */
 
-/* ======= Memory Expansion: [4000-FFFF] ======= */
-XROM = MREQ & !XPAGE1 & !XPAGE0 & A15 & A14 ; /* ROM: C000-FFFF */
-XRAM = MREQ & (A14 # A15) & !XROM ;           /* RAM: 4000-FFFF */
-XA15 = XPAGE0 & A15 ;
-XA16 = XPAGE1 & A15 ;
-
 /* ======= Programmable Sound Generator: I/O odd[F1-FF] ======= */
-PSG     = IORQ & A7 & A6 & A5 & A4 & A0; /* PSG: I/O @ 1111 xxx1 */
+PSG     = IORQ & A7 & A6 & A5 & A4 & A0; /* I/O: 1111 xxx1 */
 PSGBDIR = PSG & WR;
 PSGBC1  = PSG & (WR $ A1);
 
 /* ======= Serial Interface: odd I/O [E1..EF] ======= */
-UART    = IORQ & A7 & A6 & A5 & !A4 & A0 ; /* UART: I/O @ 1110 xxx1 */
+UART    = IORQ & A7 & A6 & A5 & !A4 & A0 ; /* I/O: 1110 xxx1 */
 UARTRST = RESET ;
+
+/* ======= Memory Expansion: [4000-FFFF] ======= */
+XROM = MREQ & XPAGE1 & XPAGE0 & A15 & A14 ; /* MEM: Page 3 @ C000-FFFF */
+XRAM = MREQ & (A14 # A15) & !(XPAGE1 & XPAGE0 & A15 & A14) ; /* MEM: Any page @ 4000-FFFF but XROM */
+XA15 = XPAGE0 # !A15 ;
+XA16 = XPAGE1 # !A15 ;
+
+/*           Page 0    Page 1    Page 2    Page 3
+C000-FFFF: [16K RAM] [16K RAM] [16K RAM] [16K ROM]  A15=1 A14=1
+8000-BFFF: [16K RAM] [16K RAM] [16K RAM] [16K RAM]  A15=1 A14=0
+4000-7FFF: [.......... 16K RAM unpaged ..........]  A15=0 A14=1
+0000-3FFF: ....... Expanded Memory Disabled ......  A15=0 A14=0
+
+XPAGE1 XPAGE0 A15 A14 | XA16 XA15
+  .      .     0   0  |   .    .  Expanded Memory disabled
+  .      .     0   1  |   1    1  16K RAM(block a) unpaged
+  0      0     1   0  |   0    0  16K RAM(block b)
+  0      0     1   1  |   0    0  16K RAM(block c)
+  0      1     1   0  |   0    1  16K RAM(block d)
+  0      1     1   1  |   0    1  16K RAM(block e)
+  1      0     1   0  |   1    0  16K RAM(block f)
+  1      0     1   1  |   1    0  16K RAM(block g)
+  1      1     1   0  |   1    1  16K RAM(block h)
+  1      1     1   1  |   .    .  16K ROM
+  
+ XA14 = A14 (wired)
+*/
+
+
