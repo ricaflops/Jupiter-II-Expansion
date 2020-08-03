@@ -10,13 +10,27 @@ An Expansion board for the [Jupiter-II](https://github.com/ricaflops/Jupiter-II)
 - Programmable Sound Generator AY-3-8910
 - Serial interface (UART)
 
+## Expanded Memory Paging Map
+```
+             Page 0    Page 1    Page 2    Page 3
+          +---------+---------+---------+---------+
+C000-FFFF |         |         |         | 16K ROM | 49152..65535
+          | 32K RAM | 32K RAM | 32K RAM +---------|
+8000-BFFF |         |         |         | 16K RAM | 32768..49151
+          |---------+---------+---------+---------|
+4000-7FFF |          16K RAM (not paged)          | 16384..32767
+          |---------------------------------------|
+0000-3FFF :        Unexpanded Jupiter-II          : 0..16383
+          +---------------------------------------+
+```
+Note: System resets to pager 3 allowing expansion ROM to be addressed immediatly
 ## Important
 Work in progress.
 The hardware is validated. Sound, Colors and Paging are working fine.
 Working in the firmware to expand FORTH vocabulary at reset.
 After that shall start looking at serial interface code.
 
-## Some FORTH code to try now
+## Some FORTH code to try
 First move RAMTOP down typing `32768 15384 ! QUIT`
 
 Then add vocabulary to talk to the Programmable Sound Generator
