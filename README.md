@@ -23,7 +23,7 @@ First move RAMTOP down with
 Then add a small vocabulary to talk to the Programmable Sound Generator
 ```
 : PSG> 253 OUT ; ( register -- )
-: PSG! PSG> 255 PSG! ; ( value register -- )
+: PSG! PSG> 255 OUT ; ( value register -- )
 : PSG@ PSG> 255 IN ; ( reg -- value )
 ```
 .. and set initial values to PSG I/O ports
