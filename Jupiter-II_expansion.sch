@@ -312,8 +312,8 @@ Wire Wire Line
 	3150 6600 3350 6600
 Wire Wire Line
 	3150 6700 3350 6700
-Text Notes 700  11000 0    50   ~ 0
-_____PSG_______________________________________\nAY-3-8910 Programmable Sound Generator\nI/O Addressing compatible with EME Sound Card\nFDh (253): select Register, \nFFh (255): read/write Register Value\n\nBDIR BC1\n  0   0  Read 253 (FDh = 1111 1101): Inactive\n  0   1  Read 255 (FFh = 1111 1111): Read from PSG Register\n  1   0  Write 255 (FFh = 1111 1111): Write to PSG Register\n  1   1  Write 253 (FDh = 1111 1101): Select PSG Register\n\nPossible AY-3-8910 replacements: (not tested!)\n  Yamaha YM2149F, YM3439-D, Toshiba T7766A,\n  Winbond WF19054, JFC 95101, File KC89C72\n  Microchip AY-3-8930 (or AY8930)\n\n_____ PSG I/O Ports ___________________\nPort A = INK and PAPER colours [IRGBirgb]\n  bit7..4: PAPER IRGB (Intensity, Red, Green, Blue)\n  bit3..0: INK irgb (Intensity, Red, Green, Blue)\nPort B = BORDER colour, Memory Page, Screen and Char Set selection\n  bit7..4: BORDER IRGB (Intensity, Red, Green, Blue)\n  bit3: Character Set 0 or 1\n  bit2: Screen Page 0 or 1\n  bit1,0: Memory Page 0..3\n
+Text Notes 1050 10050 0    50   ~ 0
+Possible AY-3-8910 replacements: (not tested!)\n  Yamaha YM2149F, YM3439-D, Toshiba T7766A,\n  Winbond WF19054, JFC 95101, File KC89C72\n  Microchip AY-3-8930 (or AY8930)\n\nI/O Addressing compatible with EME Sound Card\n  253 (FD) : Select Register, \n  255 (FF) : Read/Write Register Value\n\nBDIR BC1\n  0   0  Read 253 (FD = 1111 1101): Inactive\n  0   1  Read 255 (FF = 1111 1111): Read from PSG Register\n  1   0  Write 255 (FF = 1111 1111): Write to PSG Register\n  1   1  Write 253 (FD = 1111 1101): Select PSG Register\n\n\n\n
 Wire Wire Line
 	3250 7400 3250 7500
 $Comp
@@ -683,8 +683,6 @@ Wire Wire Line
 	5100 3200 6500 3200
 Wire Wire Line
 	6500 3200 6500 2450
-Text Notes 13250 5350 0    50   ~ 0
-FORTH definitions\n(Note: When using PSG keep Register R7 bits 6 and 7 setted \notherwise Colours and Memory paging will be affected )\n\n( Select PSG Register to Read/Write )\n: PSG> ( register -- ) 253 OUT ;\n\n( Read from PSG Register )\n: PSG@ ( register -- value ) PSG> 255 IN ;\n\n( Write to PSG Register )\n: PSG! ( value register -- ) PSG> 255 OUT ;\n\n( Set/Get INK, PAPER colour )\n: PORTA!  ( colour -- ) 14 PSG! ;\n: PORTA@ ( -- colour ) 14 PSG@ ;\n\n( Initialize PSG: R7=1100 0000, R14=1111 0001, R15=1011 0011)\n( PAPER=White, INK=BLUE, BORDER=CYAN, Memory Page=3 )\n: PSGRST\n  241 PORTA!\n  179 PORTB! \n  255 7 PSG! ;\n\n( Set/Get Paging & Border Colour on Port B: 0-15 )\n: PORTB! ( c -- ) 15 PSG! ;\n: PORTB@ ( -- c ) 15 PSG@ ;\n\n( Set INK colour: 0-15 )\n: INK ( colour -- )\n  PORTA@ 240 AND OR PORTA! ;\n\n( Set PAPER colour: 0-15 )\n: PAPER ( colour -- )\n  16 *\n  PORTA@ 15 AND OR PORTA! ;\n\n( Set BORDER colour: 0-15 )\n: BORDER ( colour --  )\n  15 AND 16 *\n  PORTB@ 15 AND OR PORTB! ;\n\n( Select Memory page: 0-3 )\n: PAGE ( page -- )\n  3 AND\n  PORTB@ 252 AND OR PORTB! ;\n\n( Select Screen page: 0-1 )\n: SCREEN ( page --  )\n  1 AND 4 *\n  PORTB@ 251 AND OR PORTB! ;\n\n( Select Character set: 0-1 )\n: CHARSET ( set --  )\n  1 AND 8 *\n  PORTB@ 247 AND OR PORTB! ;
 $Sheet
 S 12000 7500 3700 2200
 U 5E8292A6
@@ -759,143 +757,143 @@ F 3 "" H 9100 10550 50  0001 C CNN
 	1    9100 10550
 	1    0    0    -1  
 $EndComp
-Text Notes 4800 4500 0    50   ~ 0
-/* Memory Expansion: [4000-FFFF] */\nXROM = MREQ & XPAGE1 & XPAGE0 & A15 & A14 ; /* C000-FFFF */\nXRAM = MREQ & (A14 # A15) & !(XPAGE1 & XPAGE0 & A15 & A14) ;  /* 4000 to FFFF */\nXA15  = XPAGE0 # !A15 ;\nXA16  = XPAGE1 # !A15 ;\n\n/* Programmable Sound Generator: odd I/O [F1-FF] */\nPSG  = IORQ & A7 & A6 & A5 & A4 & A0; /* I/O: 1111 xxx1 */\nPSGBDIR = PSG & WR;\nPSGBC1  = PSG & (WR $ A1);\n\n/* Serial Interface: odd I/O [E1..EF] */\nUART = IORQ & A7 & A6 & A5 & !A4 & A0 ; /* I/O: 1110 xxx1 */\nUARTRST = RESET ;\n
-Text Label 9350 3650 2    50   ~ 0
+Text Notes 7150 2450 0    50   ~ 0
+GAL22V10 Logic:\n\nXROM = MREQ & XPAGE1 & XPAGE0 & A15 & A14 ;\nXRAM = MREQ & (A14 # A15) & !(XPAGE1 & XPAGE0 & A15 & A14) ; \nXA15  = XPAGE0 # !A15 ;\nXA16  = XPAGE1 # !A15 ;\n\nPSG  = IORQ & A7 & A6 & A5 & A4 & A0 ;\nPSGBDIR = PSG & WR ;\nPSGBC1  = PSG & (WR $ A1) ;\n\nUART = IORQ & A7 & A6 & A5 & !A4 & A0 ;\nUARTRST = RESET ;\n
+Text Label 12000 3650 2    50   ~ 0
 ~WR
-Text Label 9350 3550 2    50   ~ 0
+Text Label 12000 3550 2    50   ~ 0
 ~RD
 Wire Wire Line
-	9950 3950 9950 4000
+	12600 3950 12600 4000
 Wire Wire Line
-	9350 3650 9450 3650
+	12000 3650 12100 3650
 Wire Wire Line
-	9350 3550 9450 3550
+	12000 3550 12100 3550
 Wire Wire Line
-	10450 1550 10550 1550
+	13100 1550 13200 1550
 Wire Wire Line
-	10450 1650 10550 1650
+	13100 1650 13200 1650
 Wire Wire Line
-	10450 1750 10550 1750
+	13100 1750 13200 1750
 Wire Wire Line
-	10450 1850 10550 1850
+	13100 1850 13200 1850
 Wire Wire Line
-	10450 1950 10550 1950
+	13100 1950 13200 1950
 Wire Wire Line
-	10450 2050 10550 2050
+	13100 2050 13200 2050
 Wire Wire Line
-	10450 2150 10550 2150
+	13100 2150 13200 2150
 Wire Wire Line
-	10450 2250 10550 2250
-Text Label 10550 1550 0    50   ~ 0
+	13100 2250 13200 2250
+Text Label 13200 1550 0    50   ~ 0
 D0
-Text Label 10550 1650 0    50   ~ 0
+Text Label 13200 1650 0    50   ~ 0
 D1
-Text Label 10550 1750 0    50   ~ 0
+Text Label 13200 1750 0    50   ~ 0
 D2
-Text Label 10550 1850 0    50   ~ 0
+Text Label 13200 1850 0    50   ~ 0
 D3
-Text Label 10550 1950 0    50   ~ 0
+Text Label 13200 1950 0    50   ~ 0
 D4
-Text Label 10550 2050 0    50   ~ 0
+Text Label 13200 2050 0    50   ~ 0
 D5
-Text Label 10550 2150 0    50   ~ 0
+Text Label 13200 2150 0    50   ~ 0
 D6
-Text Label 10550 2250 0    50   ~ 0
+Text Label 13200 2250 0    50   ~ 0
 D7
 Wire Wire Line
-	9350 1550 9450 1550
+	12000 1550 12100 1550
 Wire Wire Line
-	9350 1650 9450 1650
+	12000 1650 12100 1650
 Wire Wire Line
-	9350 1750 9450 1750
+	12000 1750 12100 1750
 Wire Wire Line
-	9350 1850 9450 1850
+	12000 1850 12100 1850
 Wire Wire Line
-	9350 1950 9450 1950
+	12000 1950 12100 1950
 Wire Wire Line
-	9350 2050 9450 2050
+	12000 2050 12100 2050
 Wire Wire Line
-	9350 2150 9450 2150
+	12000 2150 12100 2150
 Wire Wire Line
-	9350 2250 9450 2250
+	12000 2250 12100 2250
 Wire Wire Line
-	9350 2350 9450 2350
+	12000 2350 12100 2350
 Wire Wire Line
-	9350 2450 9450 2450
+	12000 2450 12100 2450
 Wire Wire Line
-	9350 2550 9450 2550
+	12000 2550 12100 2550
 Wire Wire Line
-	9350 2650 9450 2650
+	12000 2650 12100 2650
 Wire Wire Line
-	9350 2750 9450 2750
-Text Label 9350 1550 2    50   ~ 0
+	12000 2750 12100 2750
+Text Label 12000 1550 2    50   ~ 0
 A0
-Text Label 9350 1650 2    50   ~ 0
+Text Label 12000 1650 2    50   ~ 0
 A1
-Text Label 9350 1750 2    50   ~ 0
+Text Label 12000 1750 2    50   ~ 0
 A2
-Text Label 9350 1850 2    50   ~ 0
+Text Label 12000 1850 2    50   ~ 0
 A3
-Text Label 9350 1950 2    50   ~ 0
+Text Label 12000 1950 2    50   ~ 0
 A4
-Text Label 9350 2050 2    50   ~ 0
+Text Label 12000 2050 2    50   ~ 0
 A5
-Text Label 9350 2150 2    50   ~ 0
+Text Label 12000 2150 2    50   ~ 0
 A6
-Text Label 9350 2250 2    50   ~ 0
+Text Label 12000 2250 2    50   ~ 0
 A7
-Text Label 9350 2350 2    50   ~ 0
+Text Label 12000 2350 2    50   ~ 0
 A8
-Text Label 9350 2450 2    50   ~ 0
+Text Label 12000 2450 2    50   ~ 0
 A9
-Text Label 9350 2550 2    50   ~ 0
+Text Label 12000 2550 2    50   ~ 0
 A10
-Text Label 9350 2650 2    50   ~ 0
+Text Label 12000 2650 2    50   ~ 0
 A11
-Text Label 9350 2750 2    50   ~ 0
+Text Label 12000 2750 2    50   ~ 0
 A12
 Wire Wire Line
-	9350 2850 9450 2850
+	12000 2850 12100 2850
 Wire Wire Line
-	9350 2950 9450 2950
-Text Label 9350 2850 2    50   ~ 0
+	12000 2950 12100 2950
+Text Label 12000 2850 2    50   ~ 0
 A13
-Text Label 9350 2950 2    50   ~ 0
+Text Label 12000 2950 2    50   ~ 0
 A14
 $Comp
 L power:+5V #PWR?
 U 1 1 5E8AC904
-P 9950 1200
+P 12600 1200
 AR Path="/5E875CD1/5E8AC904" Ref="#PWR?"  Part="1" 
 AR Path="/5E8AC904" Ref="#PWR01"  Part="1" 
-F 0 "#PWR01" H 9950 1050 50  0001 C CNN
-F 1 "+5V" H 9965 1373 50  0000 C CNN
-F 2 "" H 9950 1200 50  0001 C CNN
-F 3 "" H 9950 1200 50  0001 C CNN
-	1    9950 1200
+F 0 "#PWR01" H 12600 1050 50  0001 C CNN
+F 1 "+5V" H 12615 1373 50  0000 C CNN
+F 2 "" H 12600 1200 50  0001 C CNN
+F 3 "" H 12600 1200 50  0001 C CNN
+	1    12600 1200
 	1    0    0    -1  
 $EndComp
 $Comp
 L rfl_memory:628128 U?
 U 1 1 5E8AC916
-P 9950 2600
+P 12600 2600
 AR Path="/5E875CD1/5E8AC916" Ref="U?"  Part="1" 
 AR Path="/5E8AC916" Ref="U3"  Part="1" 
-F 0 "U3" H 10100 3900 50  0000 C CNN
-F 1 "628128" V 9950 2600 50  0000 C CNN
-F 2 "Package_DIP:DIP-32_W15.24mm" H 9950 2600 50  0001 C CNN
-F 3 "" H 9950 2600 50  0001 C CNN
-	1    9950 2600
+F 0 "U3" H 12750 3900 50  0000 C CNN
+F 1 "628128" V 12600 2600 50  0000 C CNN
+F 2 "Package_DIP:DIP-32_W15.24mm" H 12600 2600 50  0001 C CNN
+F 3 "" H 12600 2600 50  0001 C CNN
+	1    12600 2600
 	1    0    0    -1  
 $EndComp
 Wire Wire Line
-	9200 3450 9450 3450
+	11850 3450 12100 3450
 Wire Wire Line
-	9350 3050 9450 3050
+	12000 3050 12100 3050
 Wire Wire Line
-	9450 3150 9350 3150
-Text Notes 9800 900  0    50   ~ 0
+	12100 3150 12000 3150
+Text Notes 12450 900  0    50   ~ 0
 128k RAM\nExpansion
 $Comp
 L Device:C_Small C?
@@ -913,123 +911,123 @@ $EndComp
 $Comp
 L Memory_EPROM:27128 U?
 U 1 1 5E8AC926
-P 11650 2450
+P 14300 2450
 AR Path="/5E875CD1/5E8AC926" Ref="U?"  Part="1" 
 AR Path="/5E8AC926" Ref="U2"  Part="1" 
-F 0 "U2" H 11800 3600 50  0000 C CNN
-F 1 "27C128" V 11650 2450 50  0000 C CNN
-F 2 "Package_DIP:DIP-28_W15.24mm" H 11650 2450 50  0001 C CNN
-F 3 "http://eeshop.unl.edu/pdf/27128.pdf" H 11650 2450 50  0001 C CNN
-	1    11650 2450
+F 0 "U2" H 14450 3600 50  0000 C CNN
+F 1 "27C128" V 14300 2450 50  0000 C CNN
+F 2 "Package_DIP:DIP-28_W15.24mm" H 14300 2450 50  0001 C CNN
+F 3 "http://eeshop.unl.edu/pdf/27128.pdf" H 14300 2450 50  0001 C CNN
+	1    14300 2450
 	1    0    0    -1  
 $EndComp
 Wire Wire Line
-	12050 1550 12150 1550
+	14700 1550 14800 1550
 Wire Wire Line
-	12150 1650 12050 1650
+	14800 1650 14700 1650
 Wire Wire Line
-	12050 1750 12150 1750
+	14700 1750 14800 1750
 Wire Wire Line
-	12150 1850 12050 1850
+	14800 1850 14700 1850
 Wire Wire Line
-	12050 1950 12150 1950
+	14700 1950 14800 1950
 Wire Wire Line
-	12150 2050 12050 2050
+	14800 2050 14700 2050
 Wire Wire Line
-	12050 2150 12150 2150
+	14700 2150 14800 2150
 Wire Wire Line
-	12150 2250 12050 2250
+	14800 2250 14700 2250
 Wire Wire Line
-	11150 1550 11250 1550
+	13800 1550 13900 1550
 Wire Wire Line
-	11250 2850 11150 2850
+	13900 2850 13800 2850
 Wire Wire Line
-	11150 2750 11250 2750
+	13800 2750 13900 2750
 Wire Wire Line
-	11250 2650 11150 2650
+	13900 2650 13800 2650
 Wire Wire Line
-	11150 2550 11250 2550
+	13800 2550 13900 2550
 Wire Wire Line
-	11250 2450 11150 2450
+	13900 2450 13800 2450
 Wire Wire Line
-	11150 2350 11250 2350
+	13800 2350 13900 2350
 Wire Wire Line
-	11250 2250 11150 2250
+	13900 2250 13800 2250
 Wire Wire Line
-	11150 2150 11250 2150
+	13800 2150 13900 2150
 Wire Wire Line
-	11250 2050 11150 2050
+	13900 2050 13800 2050
 Wire Wire Line
-	11150 1950 11250 1950
+	13800 1950 13900 1950
 Wire Wire Line
-	11250 1850 11150 1850
+	13900 1850 13800 1850
 Wire Wire Line
-	11150 1750 11250 1750
+	13800 1750 13900 1750
 Wire Wire Line
-	11250 1650 11150 1650
-Text Label 12150 1550 0    50   ~ 0
+	13900 1650 13800 1650
+Text Label 14800 1550 0    50   ~ 0
 D0
-Text Label 12150 1650 0    50   ~ 0
+Text Label 14800 1650 0    50   ~ 0
 D1
-Text Label 12150 1750 0    50   ~ 0
+Text Label 14800 1750 0    50   ~ 0
 D2
-Text Label 12150 1850 0    50   ~ 0
+Text Label 14800 1850 0    50   ~ 0
 D3
-Text Label 12150 1950 0    50   ~ 0
+Text Label 14800 1950 0    50   ~ 0
 D4
-Text Label 12150 2050 0    50   ~ 0
+Text Label 14800 2050 0    50   ~ 0
 D5
-Text Label 12150 2150 0    50   ~ 0
+Text Label 14800 2150 0    50   ~ 0
 D6
-Text Label 12150 2250 0    50   ~ 0
+Text Label 14800 2250 0    50   ~ 0
 D7
-Text Label 11150 1550 2    50   ~ 0
+Text Label 13800 1550 2    50   ~ 0
 A0
-Text Label 11150 1650 2    50   ~ 0
+Text Label 13800 1650 2    50   ~ 0
 A1
-Text Label 11150 1750 2    50   ~ 0
+Text Label 13800 1750 2    50   ~ 0
 A2
-Text Label 11150 1850 2    50   ~ 0
+Text Label 13800 1850 2    50   ~ 0
 A3
-Text Label 11150 1950 2    50   ~ 0
+Text Label 13800 1950 2    50   ~ 0
 A4
-Text Label 11150 2050 2    50   ~ 0
+Text Label 13800 2050 2    50   ~ 0
 A5
-Text Label 11150 2150 2    50   ~ 0
+Text Label 13800 2150 2    50   ~ 0
 A6
-Text Label 11150 2250 2    50   ~ 0
+Text Label 13800 2250 2    50   ~ 0
 A7
-Text Label 11150 2350 2    50   ~ 0
+Text Label 13800 2350 2    50   ~ 0
 A8
-Text Label 11150 2450 2    50   ~ 0
+Text Label 13800 2450 2    50   ~ 0
 A9
-Text Label 11150 2550 2    50   ~ 0
+Text Label 13800 2550 2    50   ~ 0
 A10
-Text Label 11150 2650 2    50   ~ 0
+Text Label 13800 2650 2    50   ~ 0
 A11
-Text Label 11150 2750 2    50   ~ 0
+Text Label 13800 2750 2    50   ~ 0
 A12
-Text Label 11150 2850 2    50   ~ 0
+Text Label 13800 2850 2    50   ~ 0
 A13
-NoConn ~ 11250 3050
-NoConn ~ 11250 3150
-Text Label 11150 3350 2    50   ~ 0
+NoConn ~ 13900 3050
+NoConn ~ 13900 3150
+Text Label 13800 3350 2    50   ~ 0
 ~RD
 Wire Wire Line
-	11150 3350 11250 3350
+	13800 3350 13900 3350
 Wire Wire Line
-	11150 3250 11250 3250
+	13800 3250 13900 3250
 $Comp
 L power:+5V #PWR?
 U 1 1 5E8AC95D
-P 11650 1300
+P 14300 1300
 AR Path="/5E875CD1/5E8AC95D" Ref="#PWR?"  Part="1" 
 AR Path="/5E8AC95D" Ref="#PWR03"  Part="1" 
-F 0 "#PWR03" H 11650 1150 50  0001 C CNN
-F 1 "+5V" H 11665 1473 50  0000 C CNN
-F 2 "" H 11650 1300 50  0001 C CNN
-F 3 "" H 11650 1300 50  0001 C CNN
-	1    11650 1300
+F 0 "#PWR03" H 14300 1150 50  0001 C CNN
+F 1 "+5V" H 14315 1473 50  0000 C CNN
+F 2 "" H 14300 1300 50  0001 C CNN
+F 3 "" H 14300 1300 50  0001 C CNN
+	1    14300 1300
 	1    0    0    -1  
 $EndComp
 $Comp
@@ -1045,31 +1043,31 @@ F 3 "~" H 7250 10500 50  0001 C CNN
 	1    7250 10500
 	1    0    0    -1  
 $EndComp
-Text Notes 11450 1000 0    50   ~ 0
+Text Notes 14100 1000 0    50   ~ 0
 16K ROM\nexpansion
 Wire Wire Line
-	9350 3350 9450 3350
-Text Label 9350 3350 2    50   ~ 0
+	12000 3350 12100 3350
+Text Label 12000 3350 2    50   ~ 0
 ~XRAM
-Text Label 11150 3250 2    50   ~ 0
+Text Label 13800 3250 2    50   ~ 0
 ~XROM
-Text Label 9350 3150 2    50   ~ 0
+Text Label 12000 3150 2    50   ~ 0
 XA16
-Text Label 9350 3050 2    50   ~ 0
+Text Label 12000 3050 2    50   ~ 0
 XA15
 Wire Wire Line
-	11650 3550 11650 3600
+	14300 3550 14300 3600
 $Comp
 L power:+5V #PWR?
 U 1 1 5E8AC982
-P 9200 3450
+P 11850 3450
 AR Path="/5E875CD1/5E8AC982" Ref="#PWR?"  Part="1" 
 AR Path="/5E8AC982" Ref="#PWR05"  Part="1" 
-F 0 "#PWR05" H 9200 3300 50  0001 C CNN
-F 1 "+5V" H 9215 3623 50  0000 C CNN
-F 2 "" H 9200 3450 50  0001 C CNN
-F 3 "" H 9200 3450 50  0001 C CNN
-	1    9200 3450
+F 0 "#PWR05" H 11850 3300 50  0001 C CNN
+F 1 "+5V" H 11865 3623 50  0000 C CNN
+F 2 "" H 11850 3450 50  0001 C CNN
+F 3 "" H 11850 3450 50  0001 C CNN
+	1    11850 3450
 	0    -1   -1   0   
 $EndComp
 Wire Wire Line
@@ -1111,23 +1109,23 @@ PSGBC1
 $Comp
 L power:GNDD #PWR08
 U 1 1 5EAE6EBF
-P 11650 3600
-F 0 "#PWR08" H 11650 3350 50  0001 C CNN
-F 1 "GNDD" H 11800 3600 50  0000 C CNN
-F 2 "" H 11650 3600 50  0001 C CNN
-F 3 "" H 11650 3600 50  0001 C CNN
-	1    11650 3600
+P 14300 3600
+F 0 "#PWR08" H 14300 3350 50  0001 C CNN
+F 1 "GNDD" H 14450 3600 50  0000 C CNN
+F 2 "" H 14300 3600 50  0001 C CNN
+F 3 "" H 14300 3600 50  0001 C CNN
+	1    14300 3600
 	1    0    0    -1  
 $EndComp
 $Comp
 L power:GNDD #PWR015
 U 1 1 5EAE98B9
-P 9950 4000
-F 0 "#PWR015" H 9950 3750 50  0001 C CNN
-F 1 "GNDD" H 10100 4000 50  0000 C CNN
-F 2 "" H 9950 4000 50  0001 C CNN
-F 3 "" H 9950 4000 50  0001 C CNN
-	1    9950 4000
+P 12600 4000
+F 0 "#PWR015" H 12600 3750 50  0001 C CNN
+F 1 "GNDD" H 12750 4000 50  0000 C CNN
+F 2 "" H 12600 4000 50  0001 C CNN
+F 3 "" H 12600 4000 50  0001 C CNN
+	1    12600 4000
 	1    0    0    -1  
 $EndComp
 $Comp
@@ -1213,9 +1211,9 @@ $EndComp
 Wire Wire Line
 	2350 4950 2350 5000
 Wire Wire Line
-	11650 1300 11650 1350
+	14300 1300 14300 1350
 Wire Wire Line
-	9950 1200 9950 1250
+	12600 1200 12600 1250
 Wire Wire Line
 	5800 1200 5800 1250
 Wire Wire Line
@@ -2232,8 +2230,8 @@ F 3 "" H 10350 6350 50  0001 C CNN
 $EndComp
 Wire Wire Line
 	8250 5100 8250 5150
-Text Notes 6900 9450 0    50   ~ 0
-_____UART_____________________________________\nUART = IORQ & A0 & ADDRS:[E1..EF] ;\n\nE1h (225): RBR - Receiver Buffer Register: Read\n           THR - Transmitter Holding Register: Write\n           DLL - Divisor Latch LSB (DLAB=1)\nE3h (227): IER - Interrupt Enable Register\n           DLM - Divisor Latch MSB (DLAB=1)\nE5h (229): IIR - Interrupt Identifier Register: Read\nE7h (231): LCR - Line Control Register\nE9h (233): MCR - Modem Control Register\nEBh (235): LSR - Line Status Register\nEDh (237): MSR - Modem Status Register\nEFh (239): SCR - Scratch Register\n
+Text Notes 7100 9300 0    50   ~ 0
+_____UART_____________________________________\n225 (E1) : Receiver Buffer Register: Read\n            Transmitter Holding Register: Write\n            Divisor Latch LSB (DLAB=1)\n227 (E3) : Interrupt Enable Register\n            Divisor Latch MSB (DLAB=1)\n229 (E5) : Interrupt Identifier Register: Read\n231 (E7) : Line Control Register\n233 (E9) : Modem Control Register\n235 (EB) : Line Status Register\n237 (ED) : Modem Status Register\n239 (EF) : Scratch Register\n
 $Comp
 L Connector_Generic:Conn_01x10 J3
 U 1 1 5EFEC78C
@@ -2269,7 +2267,7 @@ Wire Wire Line
 	10250 5700 10450 5700
 Wire Wire Line
 	10250 5800 10450 5800
-Text Notes 9300 4450 0    50   ~ 0
+Text Notes 11950 4450 0    50   ~ 0
 128Kx8 SRAM alternatives:\n    TC551001PL\n    KM681000ALP\n    SRM20100LC\n
 Text Label 2400 1600 0    50   ~ 0
 SPEAKER
@@ -2309,8 +2307,6 @@ Wire Wire Line
 	7450 7200 7450 6900
 Wire Wire Line
 	7550 7500 7250 7500
-Text Notes 7000 1700 0    50   ~ 0
-XPAGE1, XPAGE0, A15, A14 -> XA16, XA15\n  xx00 -> xx  XRAM, XROM disabled\n  --01 -> 11  Unpaged 16K XRAM (A14=1)\n  0010 -> 00  16K XRAM(a) (XA14=0)\n  0011 -> 00  16K XRAM(b) (XA14=1)\n  0110 -> 01  16K XRAM(c) (XA14=0)\n  0111 -> 01  16K XRAM(d) (XA14=1)\n  1010 -> 10  16K XRAM(e) (XA14=0)\n  1011 -> 10  16K XRAM(f) (XA14=1)\n  1110 -> 11  16K XRAM(g) (XA14=0)\n  1111 -> xx  16K XROM
 $Comp
 L Device:R R?
 U 1 1 5F340AFF
@@ -2371,4 +2367,8 @@ Wire Bus Line
 	7000 5200 7000 6400
 Wire Bus Line
 	7200 5050 7200 6000
+Text Notes 4250 7000 0    50   ~ 0
+Colour Palette\n\nIRGB  Color\n0000 Black\n0001 Blue\n0010 Green\n0011 Cyan\n0100 Red\n0101 Magenta\n0110 Dark Yellow\n0111 Light Gray\n1000 Dark Gray\n1001 Light Blue\n1010 Light Green\n1011 Light Cyan\n1100 Light Red\n1101 Light Magenta\n1110 Yellow\n1111 White
+Text Notes 6650 3550 0    50   ~ 0
+Reset State:\nXPAGE = 3
 $EndSCHEMATC
