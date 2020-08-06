@@ -12,13 +12,13 @@ An Expansion board for the [Jupiter-II](https://github.com/ricaflops/Jupiter-II)
 
 ## Project status
 Hardware validated. Sound, colors and paging working fine.<br/>
-Working on a firmware to extend FORTH vocabulary at reset.
-After that shall start work on serial interface coding.
+Working on FORTH vocabulary extension at reset.<br/>
+Next shall start working on serial interfacing.
 
 ## FORTH code to try
 First move RAMTOP down with
 ```
-32768 15384 ! QUIT`
+32768 15384 ! QUIT
 ```
 Then add a small vocabulary to talk to the Programmable Sound Generator
 ```
@@ -115,7 +115,7 @@ BLUE DARK INK ( Set char foreground color )
  
 RAINBOW ( Show color bars )
 ```
-# Techincal details
+# Technical details
 
 ## Memory Paging
 ```
