@@ -97,8 +97,8 @@ BLUE DARK INK ( Set char foreground color )
 : A4 ." C U E A D G L E Y E E N   E L T" ;
 : A5 ." K E E N   E L Y     N     N O E" ;
 : A6 4 SPACES ." N     N O" 13 SPACES ." T W"  ;
-: A7 7 SPACES ." T W" 13 SPACES ." A" ;
-: A8 7 SPACES ." A" ;
+: A7 10 SPACES ." T W" 13 SPACES ." A" ;
+: A8 10 SPACES ." A" ;
 : RAINBOW
  BLACK BORDER BLACK INK
  CLS
