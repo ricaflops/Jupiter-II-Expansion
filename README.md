@@ -1,37 +1,22 @@
-# Jupiter-II-Expansion
+# Jupiter-II Expansion
 An Expansion board for the [Jupiter-II](https://github.com/ricaflops/Jupiter-II) computer
 
 ![Jupiter-II Expansion KiCAD 3D view](Jupiter-II_expansion.jpg)
 
-## Expands Jupiter-II with:
-- 128K RAM (paged)
-- 16K ROM (paged)
+## Expands Jupiter-II with
 - 16 Color Video and RGB output
-- Programmable Sound Generator AY-3-8910
-- Serial interface (UART)
+- Programmable Sound Generator
+- 128K RAM
+- 16K ROM
+- Serial interface
 
-## Expanded Memory Paging Map
-```
-             Page 0    Page 1    Page 2    Page 3
-          +---------+---------+---------+---------+
-C000-FFFF |         |         |         | 16K ROM | 49152..65535
-          | 32K RAM | 32K RAM | 32K RAM +---------|
-8000-BFFF |         |         |         | 16K RAM | 32768..49151
-          |---------+---------+---------+---------|
-4000-7FFF |          16K RAM (not paged)          | 16384..32767
-          |---------------------------------------|
-0000-3FFF :        Unexpanded Jupiter-II          : 0..16383
-          +---------------------------------------+
-```
-Note: System resets to pager 3 allowing expansion ROM to be addressed immediatly
-## Important
-Work in progress.
-The hardware is validated. Sound, Colors and Paging are working fine.
-Working in the firmware to expand FORTH vocabulary at reset.
-After that shall start looking at serial interface code.
+## Project status
+Hardware validated. Sound, colors and paging working fine.<br/>
+Working on a firmware to extend FORTH vocabulary at reset.
+After that shall start work on serial interface coding.
 
 ## FORTH code to try
-First move RAMTOP down typing:
+First move RAMTOP down with
 ```
 32768 15384 ! QUIT`
 ```
@@ -41,7 +26,7 @@ Then add a small vocabulary to talk to the Programmable Sound Generator
 : PSG! PSG> 255 PSG! ; ( value register -- )
 : PSG@ PSG> 255 IN ; ( reg -- value )
 ```
-..and set initial values of PSG I/O ports
+.. and set initial values to PSG I/O ports
 ```
 191 15 PSG! ( PAPER=White, INK=Dark Blue )
 241 14 PSG! ( BORDER=Cyan, Memory page=3, Char set=1, Screen page=1 )
@@ -130,7 +115,24 @@ BLUE DARK INK ( Set char foreground color )
  
 RAINBOW ( Show color bars )
 ```
-## The Programmable Sound Generator Registers
+# Techincal details
+
+## Memory Paging
+```
+             Page 0    Page 1    Page 2    Page 3
+          +---------+---------+---------+---------+
+C000-FFFF |         |         |         | 16K ROM | 49152..65535
+          | 32K RAM | 32K RAM | 32K RAM +---------|
+8000-BFFF |         |         |         | 16K RAM | 32768..49151
+          |---------+---------+---------+---------|
+4000-7FFF |          16K RAM (not paged)          | 16384..32767
+          |---------------------------------------|
+0000-3FFF :        Unexpanded Jupiter-II          : 0..16383
+          +---------------------------------------+
+```
+Note: System resets to page 3 to access expansion ROM immediatly
+
+## Programmable Sound Generator Registers
 ![Programmable Sound Generator Registers](psg_registers.png)
 ```
    bits: 76543210 76543210
