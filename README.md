@@ -30,39 +30,24 @@ The hardware is validated. Sound, Colors and Paging are working fine.
 Working in the firmware to expand FORTH vocabulary at reset.
 After that shall start looking at serial interface code.
 
-## Some FORTH code to try
-First move RAMTOP down typing `32768 15384 ! QUIT`
-
-Then add vocabulary to talk to the Programmable Sound Generator
+## FORTH code to try
+First move RAMTOP down typing:
+```
+32768 15384 ! QUIT`
+```
+Then add a small vocabulary to talk to the Programmable Sound Generator
 ```
 : PSG> 253 OUT ; ( register -- )
 : PSG! PSG> 255 PSG! ; ( value register -- )
 : PSG@ PSG> 255 IN ; ( reg -- value )
 ```
-..and set initial values of PSG I/O ports.
+..and set initial values of PSG I/O ports
 ```
 191 15 PSG! ( PAPER=White, INK=Dark Blue )
 241 14 PSG! ( BORDER=Cyan, Memory page=3, Char set=1, Screen page=1 )
 192 7 PSG!  ( Enable ports as Outputs )
 ```
-I/O ports control memory paging and colors:
-
-- Port A (register 15) controls PAPER and INK colors.
-
-- Port B (register 14) controls BORDER color and paging.
-```
- ______Port A_____    ______Port B_____
-| 7 6 5 4 3 2 1 0 |  | 7 6 5 4 3 2 1 0 |
-| I R G B I R G B |  | I R G B C S M M |
-|  PAPER |  INK   |  | BORDER | Paging |
-```
-Color bits: I=Intensity, R=Red, G=Green, B=Blue components
-
-Paging bits: C = Character set 0 or 1, S = Screen page 0 or 1, MM = Memory page 0..3
-
-Note: Care should be taken when writing to Port B to change BORDER color as it also controls the memory/screen paging. Screen memory holds the input buffer.
-
-### Sound Examples
+### Sound Examples in FORTH
 ```
 : TONEON
   200 0 PSG!
@@ -118,8 +103,8 @@ Note: Care should be taken when writing to Port B to change BORDER color as it a
 
 ( Examples )
 CYAN BORDER ( Change screen border color )
-WHITE PAPER ( Set character background color )
-BLUE DARK INK ( Set chat=racter foreground color ) 
+WHITE PAPER ( Set char background color )
+BLUE DARK INK ( Set char foreground color ) 
 
 : A1 ." B D D D D D D D G B G C R M Y W" ;
 : A2 ." L B G C R M Y G R L R Y E A E H" ;
@@ -163,32 +148,53 @@ R12 R11: tttttttt tttttttt : Envelope period (16-bits) 0-65535
     R15:          dddddddd : I/O Port-B data
 ```
 **R0..R6**: Tone and Noise Period (Frequency) settings<br/>
-  t = 203125 / f , where f is the desirable frequency in Hz<br/>
-  Tone Range: 49.6 Hz to 203.1 kHz (0..4095)<br/>
-  Noise Range: 6.55 kHz to 293.1 kHz (0..31)<br/>
+
+> t = 203125 / f , where f is the desirable frequency in Hz<br/>
+> Tone Range: 49.6 Hz to 203.1 kHz (0..4095)<br/>
+> Noise Range: 6.55 kHz to 293.1 kHz (0..31)<br/>
 
 **R7**: Tone and Noise Mixer and I/O Ports direction<br/>
--  bit0: when 0 enables tone A on channel A, 1 disables it<br/>
--  bit1: when 0 enables tone B on channel B, 1 disables it<br/>
--  bit2: when 0 enables tone C on channel C, 1 disables it<br/>
--  bit3: when 0 enables Noise on channel A, 1 disables it<br/>
--  bit4: when 0 enables Noise on channel B, 1 disables it<br/>
--  bit5: when 0 enables Noise on channel C, 1 disables it<br/>
--  bit6: when 0 set digital Port-A as input, 1 set it as output<br/>
--  bit7: when 0 set digital Port-B as input, 1 set it as output<br/>
+> - bit0: when 0 enables tone A on channel A, 1 disables it
+> - bit1: when 0 enables tone B on channel B, 1 disables it
+> - bit2: when 0 enables tone C on channel C, 1 disables it
+> - bit3: when 0 enables Noise on channel A, 1 disables it
+> - bit4: when 0 enables Noise on channel B, 1 disables it
+> - bit5: when 0 enables Noise on channel C, 1 disables it
+> - bit6: when 0 set digital Port-A as input, 1 set it as output
+> - bit7: when 0 set digital Port-B as input, 1 set it as output<br/>
 
 **R8..R10**: Channel volume<br/>
--  bit4  : when 0 volume is fixed, when 1 volume is Envelope controlled<br/>
--  bit3-0: Fixed volume value (0-31)<br/>
+> - bit4  : when 0 volume is fixed, when 1 volume is Envelope controlled
+> - bit3-0: Fixed volume value (0-31)<br/>
 
 **R11, R12**: Envelope period<br/>
-  t = s / 78.769e-6 , where s is the desirable period in seconds<br/>
-  Period range: 78.8 us to 5.16 seconds<br/>
+
+ > t = s / 78.769e-6 , where s is the desirable period in seconds<br/>
+ > Period range: 78.8 us to 5.16 seconds<br/>
 
 **R13**: Envelope Shape combination<br/>
--  bit3: Continue: when 1 follows Hold setting, when 0 resets down after one cycle <br/>
--  bit2: Attack: when 1 attack ramps up, when 0 ramps down<br/>
--  bit1: Alternate: when 1 envelope shape reverses on each cycle (up/down)<br/>
--  bit0: Hold: when 1 limits to one cycle and sustain final value<br/>
+
+> - bit3: Continue: when 1 follows Hold setting, when 0 resets down after one cycle
+> - bit2: Attack: when 1 attack ramps up, when 0 ramps down
+> - bit1: Alternate: when 1 envelope shape reverses on each cycle (up/down)
+> - bit0: Hold: when 1 limits to one cycle and sustain final value<br/>
 
 **R14, R15**: Digital I/O Port data<br/>
+> - Port A (register 14) controls PAPER and INK colors
+> - Port B (register 15) controls BORDER color and paging<br/>
+```
+ ______Port A_____    ______Port B_____
+| 7 6 5 4 3 2 1 0 |  | 7 6 5 4 3 2 1 0 |
+| I R G B I R G B |  | I R G B C S M M |
+|  PAPER |  INK   |  | BORDER | Paging |
+```
+> Color bits: 
+> - I=Intensity
+> - R=Red
+> - G=Green
+> - B=Blue components<br/>
+
+> Paging bits:
+> - C = Character set 0 or 1 
+> - S = Screen page 0 or 1 
+> - MM = Memory page 0..3<br/>
