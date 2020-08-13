@@ -1,6 +1,8 @@
 # Jupiter-II Expansion
 An Expansion board for the [Jupiter-II](https://github.com/ricaflops/Jupiter-II) computer
 
+![Jupiter-II Color Screen](Jupiter-II_color.jpg)
+
 ![Jupiter-II Expansion KiCAD 3D view](Jupiter-II_expansion.jpg)
 
 ## Expands Jupiter-II with
@@ -9,6 +11,7 @@ An Expansion board for the [Jupiter-II](https://github.com/ricaflops/Jupiter-II)
 - 128K RAM
 - 16K ROM
 - Serial interface
+- Extra FORTH words
 
 ## Project status
 Hardware validated. Sound, colors and paging working fine.<br/>
@@ -114,6 +117,42 @@ BLUE DARK INK ( Set char foreground color )
  ;
  
 RAINBOW ( Show color bars )
+```
+# Extra FORTH Words
+**Work in progress..**
+
+### Standard words
+```
+HEX   ( -- ) Set numeric base to Hexadecimal
+CMOVE ( addr1 addr2 n -- ) Copy 'n' bytes from 'addr1' to 'addr2'
+FILL  ( addr n c -- ) Fill 'n' bytes with 'c' starting from 'addr'
+```
+### Programmable Sound Generator
+```
+PSG! ( c reg -- ) Write 'c' to PSG register 'reg'
+PSG@ ( reg -- c ) Read PSG register 'reg' contents
+```
+### Memory Paging
+```
+MPAGE  ( c -- ) Select memory page 'c' , 0 to 3
+SCREEN ( c -- ) Select Screen page 'c' , 0 or 1
+FONT   ( c -- ) Select character set 'c' , 0 or 1
+```
+### Color
+```
+BORDER ( c -- ) Set screen BORDER to color 'c' , 0 to 15
+INK    ( c -- ) Set character INK to color 'c' , 0 to 15
+PAPER  ( c -- ) Set character PAPER to color 'c' , 0 to 15
+BLACK  ( -- c ) Stack color code for Black
+GREY   ( -- c ) Stack color code for Grey
+BLUE   ( -- c ) Stack color code for Blue
+GREEN  ( -- c ) Stack color code for Green
+CYAN   ( -- c ) Stack color code for Cyan
+RED    ( -- c ) Stack color code for Red
+PURPLE ( -- c ) Stack color code for Purple
+YELLOW ( -- c ) Stack color code for Yellow
+WHITE  ( -- c ) Stack color code for White
+DARK   ( c1 -- c2 ) Change color code on stack to a darker tone
 ```
 # Technical details
 
