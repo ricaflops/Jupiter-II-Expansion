@@ -1009,8 +1009,6 @@ Text Label 13800 2750 2    50   ~ 0
 A12
 Text Label 13800 2850 2    50   ~ 0
 A13
-NoConn ~ 13900 3050
-NoConn ~ 13900 3150
 Text Label 13800 3350 2    50   ~ 0
 ~RD
 Wire Wire Line
@@ -2363,12 +2361,34 @@ Connection ~ 6600 3300
 Wire Wire Line
 	6700 3200 6500 3200
 Connection ~ 6500 3200
-Wire Bus Line
-	7000 5200 7000 6400
-Wire Bus Line
-	7200 5050 7200 6000
 Text Notes 4250 7000 0    50   ~ 0
 Colour Palette\n\nIRGB  Color\n0000 Black\n0001 Blue\n0010 Green\n0011 Cyan\n0100 Red\n0101 Magenta\n0110 Dark Yellow\n0111 Light Gray\n1000 Dark Gray\n1001 Light Blue\n1010 Light Green\n1011 Light Cyan\n1100 Light Red\n1101 Light Magenta\n1110 Yellow\n1111 White
 Text Notes 6650 3550 0    50   ~ 0
 Reset State:\nXPAGE = 3
+$Comp
+L power:+5V #PWR?
+U 1 1 5F38E533
+P 13700 3050
+AR Path="/5E875CD1/5F38E533" Ref="#PWR?"  Part="1" 
+AR Path="/5F38E533" Ref="#PWR?"  Part="1" 
+F 0 "#PWR?" H 13700 2900 50  0001 C CNN
+F 1 "+5V" H 13715 3223 50  0000 C CNN
+F 2 "" H 13700 3050 50  0001 C CNN
+F 3 "" H 13700 3050 50  0001 C CNN
+	1    13700 3050
+	0    -1   -1   0   
+$EndComp
+Wire Wire Line
+	13900 3150 13850 3150
+Wire Wire Line
+	13850 3150 13850 3050
+Wire Wire Line
+	13850 3050 13900 3050
+Wire Wire Line
+	13700 3050 13850 3050
+Wire Bus Line
+	7000 5200 7000 6400
+Wire Bus Line
+	7200 5050 7200 6000
+Connection ~ 13850 3050
 $EndSCHEMATC
