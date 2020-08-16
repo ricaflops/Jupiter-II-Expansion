@@ -32,16 +32,6 @@ Next shall start working on serial interfacing.
 ```
 ### Sound
 ```
-: TONEON
-  200 0 PSG!
-  254 7 PSG!
-  14 8 PSG!
-;
-
-: TONEOFF
-  255 7 PSG!
-;
-
 : PING
   200 0 PSG!
   254 7 PSG!
@@ -64,29 +54,14 @@ CYAN BORDER ( Change screen border color )
 WHITE PAPER ( Set char background color )
 BLUE DARK INK ( Set char foreground color ) 
 
-: A1 ." B D D D D D D D G B G C R M Y W" ;
-: A2 ." L B G C R M Y G R L R Y E A E H" ;
-: A3 ." A L R Y E A E R E U E A D G L I" ;
-: A4 ." C U E A D G L E Y E E N   E L T" ;
-: A5 ." K E E N   E L Y     N     N O E" ;
-: A6 4 SPACES ." N     N O" 13 SPACES ." T W"  ;
-: A7 10 SPACES ." T W" 13 SPACES ." A" ;
-: A8 10 SPACES ." A" ;
-: RAINBOW
- BLACK BORDER BLACK INK
- CLS
- 12 0 DO
-  16 0 DO
-   I PAPER 2 SPACES
-  LOOP
- LOOP
- A1 CR A2 CR
- A3 CR A4 CR
- A5 CR A6 CR
- A7 CR A8 CR
- ;
- 
-RAINBOW ( Show color bars )
+: COLORBAR
+  CLS 10 8 AT 16 0
+  DO
+   I INK 144 EMIT
+  LOOP 
+  BLACK INK
+  ;
+COLORBAR ( Show a colorfull bar )
 ```
 ### Serial Data Transfer
 ```
