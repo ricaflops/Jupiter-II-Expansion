@@ -6,17 +6,11 @@ An Expansion board for the [Jupiter-II](https://github.com/ricaflops/Jupiter-II)
 ![Jupiter-II Expansion KiCAD 3D view](Jupiter-II_expansion.jpg)
 
 ## Expands Jupiter-II with
-- 16 Color Video and RGB output
+- Color Video: 16 colors, RGB output
 - Programmable Sound Generator
-- 128K RAM
-- 16K ROM
-- Serial interface
-- Extra FORTH words
-
-## Project status
-Hardware validated. Sound, colors and paging working fine.<br/>
-Working on FORTH vocabulary extension at reset.<br/>
-Next shall start working on serial interfacing.
+- 128K RAM: paged
+- 16K ROM: FORTH vocabulary extension
+- Serial Interface Port
 
 ## FORTH code examples
 ### Memory Paging
@@ -30,7 +24,7 @@ Next shall start working on serial interfacing.
 0 MPAGE ( select memory page 0 )
 3 MPAGE ( select memory page 3 )
 ```
-### Sound
+### Sounds
 ```
 : PING
   200 0 PSG!
@@ -63,14 +57,36 @@ BLUE DARK INK ( Set char foreground color )
   ;
 COLORBAR ( Show a colorfull bar )
 ```
-### Serial Data Transfer
-```
-4800 BAUD ( Configure UART to 4800 Baud Rate )
-15441 526 TX (Transmit 526 bytes starting at address 15441 )
-```
-# Extra FORTH Words
+
+### Serial Comm Port
+
+8 data bits, 1 stop bit, no parity.
+
+'''
+( Create and Allocate a memory space to work )
+CREATE BUFFER
+256 ALLOT
+( Add some vocabulary to test )
+: CLRBUF 256 0 DO 32 BUFFER I + C! LOOP ; ( Clear Buffer )
+: PRTBUF CR 256 0 DO BUFFER I + EMIT LOOP CR ; ( Print Buffer )
+
+9600 BAUD     ( set communication baud rate )
+CLRBUF        ( Clear Buffer )
+BUFFER 256 RX ( Receive 256 bytes from serial line )
+PRTBUF        ( View received data )
+BUFFER 256 TX ( Transmit 256 bytes over serial line )
+'''
+
+Note: use Space key to abort communication if needed.
+
+# Technical details
+
+## Extra FORTH vocabulary
+The extended vocabulary is copied from XROM to a unused 1K RAM area at $3000-$33FF of Jupiter-II during initialization.
+That allows safe memory paging while keeping the extra Words accessible.
 
 ### Standard words
+
 ```
 COUNT ( addr -- addr+1 c )  Extract String length
 +! ( n addr -- )  Add 'n' to 'addr' variable
@@ -80,24 +96,31 @@ FILL  ( addr n c -- )  Fill 'n' bytes with 'c' starting from 'addr'
 DEPTH ( -- n )  Data Stack Depth
 HEX   ( -- )  Set numeric base to Hexadecimal
 ```
+
 ### Programmable Sound Generator
+
 ```
 PSG! ( c reg -- ) Write 'c' to PSG register 'reg'
 PSG@ ( reg -- c ) Read PSG register 'reg' contents
 ```
-### Memory Paging
-```
-MPAGE  ( c -- ) Select memory page 'c' , 0 to 3
-SCREEN ( c -- ) Select Screen page 'c' , 0 or 1
-FONT   ( c -- ) Select character set 'c' , 0 or 1
-```
+
 ### Serial Communication
+8 data bits, 1 stop bit, no parity.
+
 ```
 BAUD ( n --  )  Set UART to Baud rate 'n'
 TX ( addr n --  )  Transmit 'n' bytes starting from 'addr' to serial line
 RX ( addr n --  )  Receive 'n' bytes from serial line to memory 'addr'
 ```
+
+Avoid transfering to/from video RAM using video circuit priority addressing. That prevents transfer speeds above 1200 bauds.
+- Video RAM from $2400 to $27FF. Use mirror addressing $2000 to $23FF instead (CPU priority).
+- Character Genrator RAM from $2C00 to $2FFF. Use mirror addressing $2800 to $2BFF instead (CPU priority).
+
+Note: Character Generator RAM is write only.
+
 ### Color
+
 ```
 BORDER ( c -- ) Set screen BORDER to color 'c' , 0 to 15
 INK    ( c -- ) Set character INK to color 'c' , 0 to 15
@@ -113,9 +136,15 @@ YELLOW ( -- c ) Stack color code for Yellow
 WHITE  ( -- c ) Stack color code for White
 DARK   ( c1 -- c2 ) Change color code on stack to a darker tone
 ```
-# Technical details
 
-## Memory Paging
+### Memory Paging
+
+```
+MPAGE  ( c -- ) Select memory page 'c' , 0 to 3
+SCREEN ( c -- ) Select Screen page 'c' , 0 or 1
+FONT   ( c -- ) Select character set 'c' , 0 or 1
+```
+
 ```
              Page 0    Page 1    Page 2    Page 3
           +---------+---------+---------+---------+
@@ -132,6 +161,7 @@ Note: System resets to page 3 to access expansion ROM immediatly
 
 ## Programmable Sound Generator Registers
 ![Programmable Sound Generator Registers](psg_registers.png)
+
 ```
    bits: 76543210 76543210
   R1 R0: ----tttt tttttttt : Tone generator A period (12-bits) 0-4095
