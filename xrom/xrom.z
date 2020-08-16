@@ -179,7 +179,7 @@ colorBarLoop:                   ; loop through the 16 colors
     PrintAt 22, 14, strYear     ; "2020"    at line 22, column 14
 ;----------------------------- Play Initialization Tone
     PSGset       203,  0        ; Tone A period = 1ms (1kHz)
-    PSGset 11111110b,  7        ; Channel A = Tone A
+    PSGset 11111110b,  7        ; Tone A enabled at Channel A
     PSGset        24,  8        ; Channel A Volume = 75%
     PSGset        25, 12        ; Envelope Period = 504 ms
     PSGset 00000001b, 13        ; Envelope ramps down one cycle
@@ -313,7 +313,7 @@ countLink:
 ;-------------------------------
 ; +! ( n addr -- )
 ;-------------------------------
-; Add 'n' to 'addr' contents (code from the Jupiter Ace Manual)
+; Add 'n' to 'addr' variable (code from the Jupiter Ace Manual)
 ; : +! SWAP OVER @ + SWAP ! ;
 pstoreName:
     .DC    "+!"       ; Name Field: (DC sets bit 7 of last char)
@@ -333,7 +333,7 @@ pstoreLink:
 ;-------------------------------
 ; ? ( addr -- )
 ;-------------------------------
-; Print address contents (code from the Jupiter Ace Manual)
+; Print variable value (code from the Jupiter Ace Manual)
 ; : ? @ . ;
 questionName:
     .DC    "?"         ; Name Field: (DC sets bit 7 of last char)
@@ -349,7 +349,7 @@ questionLink:
 ;-------------------------------
 ; CMOVE ( addr1 addr2 n -- )
 ;-------------------------------
-; Copy 'n' bytes from 'addr1' to 'addr2'
+; Move 'n' bytes from 'addr1' to 'addr2'
 cmoveName:
     .DC    "CMOVE"       ; Name Fieldh (DC sets bit 7 of last char)
     .WORD  questionLink  ; Link Field: previous defined word in vocabulary
@@ -357,18 +357,13 @@ cmoveLink:
     .BYTE  $ - cmoveName - 2  ; Name Length Field
     .WORD  $ + 2              ; Code Field
     ;----------
-	;***** TODO: make it work with overlaping addresses
 	CALL  forthPopBC   ; BC = bytes to move (from Top of Stack)
     FORTHpop           ; Get destination address from Top of Stack to DE
 	PUSH  DE           ; Save Destination address
 	FORTHpop           ; Get source address from Top of Stack to DE
 	EX    DE,HL        ; HL = Source address
 	POP   DE           ; DE = Destination address
-	BIT   7,B          ; check if negative length
-	JR    NZ,cmoveExit ; Exit if so
-
-	LDIR               ; Copy bytes moving up  
-cmoveExit:
+    CALL  cmove        ; Move Data Block
     FORTHreturn        ; Return back to FORTH
 
 ;-------------------------------
@@ -388,18 +383,7 @@ fillLink:
 	FORTHpop          ; pop DE = 'addr'
 	EX    DE,HL       ; HL = 'addr'
 	LD    E,A         ; E = 'c'
-
-    LD    A,B         ; Check if 'n' is zero
-    OR    C
-	JR    Z,fillExit  ; If 'n' = 0 , exit
-fillLoop:
-    LD    (HL),E      ; fill memory with 'c'
-    INC   HL          ; next destination address
-	DEC   BC          ; Byte Count
-	LD    A,B         ; Finished?
-	OR    C
-    JR    NZ,fillLoop ; Repeat 'n' times
-fillExit:
+    CALL  fill        ; Fill memory block
     FORTHreturn       ; Return back to FORTH
 
 ;-------------------------------
@@ -428,8 +412,9 @@ depthLink:
     .WORD  F_SEMICOLON      ; ; (end Forth word definition)	
 
 ;-------------------------------
-;***** To Do: More Words to add *****
+;***** To Do: FORTH Words to add *****
 ;-------------------------------
+; -TRAILING
 ; ( from the Ace Manual )
 ; : KEY ( -- c )  BEGIN INKEY ?DUP UNTIL ;
 ; : ' ( -- n )  FIND 2+ ;
@@ -444,8 +429,6 @@ depthLink:
 ;     DROP DROP
 ;   THEN
 ; ;
-; (others not from the manual
-; -TRAILING
 	
 ;-------------------------------
 ; HEX ( -- )
@@ -585,7 +568,7 @@ fontLink:
 ;-------------------------------
 ; BAUD ( n --  )
 ;-------------------------------
-; Initialize UART with baud rate 'n'
+; Set UART to Baud rate 'n'
 baudName:
     .DC    "BAUD"    ; Name Fieldh (DC sets bit 7 of last char)
     .WORD  fontLink  ; Link Field: previous defined word in vocabulary
@@ -618,16 +601,16 @@ txLink:
     ;----------
 	CALL   forthPopBC      ; pop BC = 'n' from Data Stack
 	FORTHpop               ; pop DE = 'addr' from data stack
-	EX     DE,HL           ; HL = 'addr'
-	LD     D,B             ; DE = 'n'
+	EX     DE,HL           ; HL = 'addr' = Starting address
+	LD     D,B             ; DE = 'n'    = Number of bytes to transmit
 	LD     E,C
-	CALL   UartTx          ; Transmit Data Block
+	CALL   UartTx          ; Transmit Serial Data Block
     FORTHreturn            ; Return back to FORTH
 
 ;-------------------------------
 ; RX ( addr n --  )
 ;-------------------------------
-; Receive 'n' bytes from serial line to memory 'addr'
+; Receive 'n' bytes from serial line to 'addr'
 rxName:
     .DC    "RX"    ; Name Fieldh (DC sets bit 7 of last char)
     .WORD  txLink  ; Link Field: previous defined word in vocabulary
@@ -637,10 +620,10 @@ rxLink:
     ;----------
 	CALL   forthPopBC      ; pop BC = 'n' from Data Stack
     FORTHpop               ; pop DE = 'addr' from Data Stack
-	EX     DE,HL           ; HL = 'addr'
-	LD     D,B             ; DE = 'n'
+	EX     DE,HL           ; HL = 'addr' = Starting address
+	LD     D,B             ; DE = 'n'    = Number of bytes to receive
 	LD     E,C
-	CALL   UartRx          ; Receive Data Block
+	CALL   UartRx          ; Receive Serial Data Block
     FORTHreturn            ; Return back to FORTH
 	
 ;-------------------------------
@@ -659,11 +642,10 @@ borderLink:
     IN   A,(PSG_VAL)  ; Read PSG Port B value
     AND  00001111b    ; mask out BORDER color
     LD   C,A          ; save memory and screen pages and char set
-    
     FORTHpop          ; Pop DE from FORTH data stack
-    LD   A,E          ; BORDER color
+    LD   A,E          ; A = BORDER color
     SLA  A            ; position BORDER color at the higher 4 bits
-    SLA  A            ; (also limits BORDER color to 0..15)
+    SLA  A            ; (also limiting BORDER color to 0..15)
     SLA  A
     SLA  A
     OR   C            ; combine with saved memory and screen pages and char set
@@ -686,9 +668,8 @@ inkLink:
     IN   A,(PSG_VAL)  ; Read PSG Port A value
     AND  11110000b    ; mask out current INK color
     LD   C,A          ; save PAPER color
-    
     FORTHpop          ; Pop DE from FORTH data stack
-    LD   A,E          ; INK color
+    LD   A,E          ; A = INK color
     AND  00001111b    ; limit INK color to 0..15
     OR   C            ; combine with saved PAPER color
     OUT  (PSG_VAL),A  ; Write back to Port A
@@ -710,9 +691,8 @@ paperLink:
     IN   A,(PSG_VAL)  ; Read PSG Port A value
     AND  00001111b    ; mask out current PAPER color, preserving INK color
     LD   C,A          ; save INK color
-    
     FORTHpop          ; Pop DE from FORTH data stack
-    LD   A,E          ; PAPER color
+    LD   A,E          ; A = PAPER color
     SLA  A            ; position PAPER color at the higher 4 bits
     SLA  A            ; (also limits PAPER color to 0..15)
     SLA  A
@@ -732,7 +712,7 @@ blackLink:
     .WORD  $ + 2              ; Code Field
     ;----------
 	LD    E,0                 ; Black color
-stackByte:
+stackByteAndFinish:
     LD    D,0                 ; Clear High byte
 	FORTHpush                 ; Push DE to FORTH data stack
     FORTHreturn               ; Return back to FORTH
@@ -749,7 +729,7 @@ greyLink:
     .WORD  $ + 2             ; Code Field
     ;----------
     LD    E,1000b            ; Grey color
-	JP    stackByte
+	JP    stackByteAndFinish
 
 ;-------------------------------
 ; BLUE ( -- c )
@@ -762,7 +742,7 @@ blueLink:
     .WORD  $ + 2             ; Code Field
     ;----------
     LD    E,1001b            ; Blue color
-	JP    stackByte
+	JP    stackByteAndFinish
 
 ;-------------------------------
 ; GREEN ( -- c )
@@ -775,7 +755,7 @@ greenLink:
     .WORD  $ + 2              ; Code Field
     ;----------
     LD    E,1010b             ; Green color
-	JP    stackByte
+	JP    stackByteAndFinish
 
 ;-------------------------------
 ; CYAN ( -- c )
@@ -788,7 +768,7 @@ cyanLink:
     .WORD  $ + 2             ; Code Field
     ;----------
     LD    E,1011b            ; Cyan color
-	JP    stackByte
+	JP    stackByteAndFinish
 
 ;-------------------------------
 ; RED ( -- c )
@@ -801,7 +781,7 @@ redLink:
     .WORD  $ + 2            ; Code Field
     ;----------
     LD    E,1100b           ; Red color
-	JP    stackByte
+	JP    stackByteAndFinish
 
 ;-------------------------------
 ; PURPLE ( -- c )
@@ -814,7 +794,7 @@ purpleLink:
     .WORD  $ + 2               ; Code Field
     ;----------
     LD    E,1101b              ; Purple color
-	JP    stackByte
+	JP    stackByteAndFinish
 
 ;-------------------------------
 ; YELLOW ( -- c )
@@ -827,7 +807,7 @@ yellowLink:
     .WORD  $ + 2               ; Code Field
     ;----------
     LD    E,1110b              ; Yellow color
-	JP    stackByte
+	JP    stackByteAndFinish
 
 ;-------------------------------
 ; WHITE ( -- c )
@@ -840,7 +820,7 @@ whiteLink:
     .WORD  $ + 2              ; Code Field
     ;----------
     LD    E,1111b             ; White color
-	JP    stackByte
+	JP    stackByteAndFinish
 
 ;-------------------------------
 ; DARK ( c1 -- c2 )
@@ -857,14 +837,62 @@ darkLink:
     LD    A,E                ; Get lower byte
     AND   0111b              ; Clear intensity bit3
     LD    E,A                ; Put it back in Data Stack
-    JP    stackByte
+    JP    stackByteAndFinish
 
 ;------------------------------------------------------------------------------
 ; XDICT Subroutines -----------------------------------------------------------
 ;------------------------------------------------------------------------------
-; Serial Interface  (UART 16C450) routines
-	
+
 ;-------------------------------
+; Fill memory block
+; Input: HL = Starting address to fill
+;        BC = Number of bytes to fill
+;        E  = Filling byte value
+fill:
+    LD    A,B         ; Check if block size is zero
+    OR    C
+	RET   Z           ; If block size = 0 , Exit loop
+	;----
+    LD    (HL),E      ; write one byte
+    INC   HL          ; move to next address
+	DEC   BC          ; Number of bytes Countdown
+	JR    fill        ; Fill loop
+
+;-------------------------------
+; Block move code based on 'Z80 Assembly Language Routines' from 'Lance A. Leventhal'
+; Input: HL = Source address
+;        DE = Destination address
+;        BC = Number of bytes to move
+; Affects: AF, BC, DE, HL
+cmove:
+    LD    A,B    ; check if zero bytes to move
+	OR    C
+	RET   Z      ; if zero bytes to move , Abort
+	; check for overlaping regions
+    EX    DE,HL   ; calculate destination - source
+	PUSH  HL      ; save destination address
+	AND   A       ; prepare for subtraction (clear carry)
+	SBC   HL,DE   ; HL = destination - source
+	AND   A       ; prepare for subtraction (clear carry)
+	SBC   HL,BC   ; subtract size
+	POP   HL      ; restore destination address
+	EX    DE,HL   ; HL = source , DE = destinattion
+	JR    NC,cmoveUp ; no overlaping , move up
+	; Destination area is above and overlaps with source
+	; move from highest address avoiding data destruction
+	ADD   HL,BC     ; sourceHigh = sourceLow + length - 1
+	DEC   HL
+	EX    DE,HL
+	ADD   HL,BC     ; destHigh = destLo + length - 1
+	DEC   HL
+	EX    DE,HL     ; HL = source , DE = destination
+	LDDR            ; Block move high to low
+	RET
+cmoveUp:
+    LDIR            ; Block move low to high
+	RET
+
+;------------------------------- (UART 16C450)
 ; UART Inititalization: 8 data bits, 1 stop bit, no parity
 ;   Input: BC = Baud rate divisor
 ; Affects: A
@@ -882,7 +910,7 @@ UartSet:
     OUT   (UART_LCR),A
     RET
 
-;-------------------------------
+;------------------------------- (UART 16C450)
 ; Check if UART exist by writing/reading scratch register
 ; Output: A=0 and Z flag set only if UART exists
 ; Affects: A 
@@ -892,6 +920,7 @@ UartCheck:
 	IN    A,(UART_SCR)      ; Read it back
 	XOR   $AA               ; If success, A=0 and Z flag is set
 	JR    NZ,UartCheckExit  ; Fail, get out
+	;----
 	LD    A,$55             ; Test pattern 2
 	OUT   (UART_SCR),A      ; Write test bits to Scratch register
 	IN    A,(UART_SCR)      ; Read it back
@@ -899,29 +928,30 @@ UartCheck:
 UartCheckExit:
 	RET
 	
-;-------------------------------
+;------------------------------- (UART 16C450)
 ; Receive bytes from serial line
 ; Input: HL = destination memory block
-;        BC = bytes to receive
+;        DE = bytes to receive
 UartRx:
 	CALL  UartCheck      ; Check if UART exist
-	JR    NZ,UartExit    ; UART does not exist, abort
+	RET   NZ             ; UART does not exist, abort
 UartRxWait:
-    CALL  scanKbrd       ; Wait release all keys
-    AND   A
-	JR    NZ,UartRxWait
-
-	DI                   ; Avoid interrupts
-UartRxLoop:
     LD   BC,$7FFE        ; Check for Break Key (space scan group)
     IN   A,(C)           ; Space key is in $7FFE key group, bit-0
 	BIT  0,A             ; Check for 'space' keypress
+	JR   Z,UartRxWait    ; 'space' key pressed , wait release
+	;----
+	DI                   ; Avoid interrupts
+UartRxLoop:
+    ; Check for Break Key (relies on LD BC,$7FFE above)
+    IN   A,(C)           ; Space key is in $7FFE key group, bit-0
+	BIT  0,A             ; Check for 'space' keypress
 	JR   Z,UartExit      ; 'space' key pressed , Abort
-
+    ; Check if new byte arrived
     IN    A,(UART_LSR)   ; Read Line Status Register
     BIT   0,A            ; check UART ready to receive flag
     JR    Z,UartRxLoop   ; wait if not ready
-
+    ; Get received byte
     IN    A,(UART_DATA)  ; Get received byte
 	LD    (HL),A         ; Store it in memory
 	INC   HL             ; Point to next receive memory position
@@ -929,7 +959,6 @@ UartRxLoop:
 	LD    A,D            ; Last byte ?
 	OR    E
 	JR    NZ,UartRxLoop  ; No, Receive next byte
-
 UartExit:
     CALL  scanKbrd       ; Wait for key release
     AND   A
@@ -938,29 +967,30 @@ UartExit:
     EI                   ; Re-enable Interrupts
     RET
 
-;-------------------------------
+;------------------------------- (UART 16C450)
 ; Transmit bytes over serial line
 ; Input: HL = source memory block
 ;        DE = bytes to transmit
 UartTx:
 	CALL  UartCheck      ; Check if UART exist
-	JR    NZ,UartExit    ; UART does not exist, abort
+	RET   NZ             ; UART does not exist, abort
 UartTxWait:
-    CALL  scanKbrd       ; Wait release all keys
-    AND   A
-	JR    NZ,UartTxWait	
-	
+    LD   BC,$7FFE        ; Check for Break Key
+    IN   A,(C)           ; Space key is in $7FFE key group, bit-0
+	BIT  0,A             ; Check for 'space' keypress
+	JR   Z,UartTxWait    ; 'space' key pressed , wait release	
+    ;----
 	DI                   ; Avoid Interrupts
 UartTxLoop:
-    LD   BC,$7FFE        ; Check for Break Key (space scan group)
+    ; Check for Break Key (relies on LD BC,$7FFE above)
     IN   A,(C)           ; Space key is in $7FFE key group, bit-0
 	BIT  0,A             ; Check for 'space' keypress
 	JR   Z,UartExit      ; 'space' key pressed , Abort
-
+    ; Check if last byte was transmitted
     IN   A,(UART_LSR)    ; Read Line Status Register
 	BIT  5,A             ; check UART ready to send flag
 	JR   Z,UartTxLoop    ; wait if not ready
-
+    ; Send a new byte
     LD    A,(HL)         ; Get byte to transmit	
     OUT   (UART_DATA),A  ; Send byte
     INC   HL             ; Point to next data byte
@@ -968,7 +998,7 @@ UartTxLoop:
 	LD    A,D            ; Last byte ?
 	OR    E
 	JR    NZ,UartTxLoop  ; No, Transmit next byte
-	
+	;----
 	JP    UartExit       ; Exit
 
 ;##############################################################################

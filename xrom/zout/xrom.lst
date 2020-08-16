@@ -131,17 +131,17 @@
  129:   72+36	C010  3E07D3FD	    PSGset 11111111b, PSGenable    ; Enable Ports A & B as outputs, disable Sound channels
 	              3EFFD3FF
  130:				;-----------------------------  Install Character Set at FONT 0
- 131:  108+10	C018  21FDC3  	    LD    HL,charSet               ; Source: New Character set pattern
+ 131:  108+10	C018  2113C4  	    LD    HL,charSet               ; Source: New Character set pattern
  132:  118+10	C01B  11002C  	    LD    DE,CHARRAM               ; Destination: Character Set RAM
  133:  128+10	C01E  010004  	    LD    BC,charSetEnd - charSet  ; Bytes to copy
  134:  138+16+5	C021  EDB0    	    LDIR                           ; Do copy
  135:				;-----------------------------  Install extra FORTH words
  136:  154+10	C023  2126C1  	    LD    HL,dictExp               ; Source: Extra FORTH words definition
  137:  164+10	C026  110030  	    LD    DE,XDICT                 ; Destination: Lower 1K RAM
- 138:  174+10	C029  01D702  	    LD    BC,dictExpEnd - dictExp  ; Bytes to copy
+ 138:  174+10	C029  01ED02  	    LD    BC,dictExpEnd - dictExp  ; Bytes to copy
  139:  184+16+5	C02C  EDB0    	    LDIR                           ; Do copy
  140:				    ; Link Extra Words under FORTH word
- 141:  200+10	C02E  215732  	    LD    HL,darkLink              ; last defined extra word link field
+ 141:  200+10	C02E  214C32  	    LD    HL,darkLink              ; last defined extra word link field
  142:  210+16	C031  22473C  	    LD    (FORTH_LF),HL            ; Replace original FORTH link to include expanded dictionary
  143:				;----------------------------- Initialize Screen page 0	
  144:  226+17	C034  CDDFC0  		CALL   clearScreen             ; Clear screen page 0
@@ -190,7 +190,7 @@
  180:				;----------------------------- Play Initialization Tone
  181:  619+36	C08F  3E00D3FD	    PSGset       203,  0        ; Tone A period = 1ms (1kHz)
 	              3ECBD3FF
- 182:  655+36	C097  3E07D3FD	    PSGset 11111110b,  7        ; Channel A = Tone A
+ 182:  655+36	C097  3E07D3FD	    PSGset 11111110b,  7        ; Tone A enabled at Channel A
 	              3EFED3FF
  183:  691+36	C09F  3E08D3FD	    PSGset        24,  8        ; Channel A Volume = 75%
 	              3E18D3FF
@@ -213,7 +213,7 @@
  197:  891+17	C0CB  CDDFC0  	    CALL  clearScreen
  198:				;----------------------------- Initialize Serial Communication
  199:  908+10	C0CE  011800  	    LD    BC,24        ; UART Baud rate divisor for 9600 Baud
- 200:  918+17	C0D1  CD6232  	    CALL  UartSet      ; (subroutine at XDICT space)
+ 200:  918+17	C0D1  CD7A32  	    CALL  UartSet      ; (subroutine at XDICT space)
  201:				;----------------------------- Limit RAMTOP to unpaged RAM and QUIT to FORTH
  202:  935+10	C0D4  210080  	    LD    HL,PAGEDRAM  ; Limit FORTH to unpaged RAM region below 32768
  203:  945+16	C0D7  22183C  	    LD    (RAMTOP),HL  ; This allows for memory paging without fuss
@@ -333,7 +333,7 @@
  313:				;-------------------------------
  314:				; +! ( n addr -- )
  315:				;-------------------------------
- 316:				; Add 'n' to 'addr' contents (code from the Jupiter Ace Manual)
+ 316:				; Add 'n' to 'addr' variable (code from the Jupiter Ace Manual)
  317:				; : +! SWAP OVER @ + SWAP ! ;
  318:     -	3014          	pstoreName:
  319:     -	3014  2BA1    	    .DC    "+!"       ; Name Field: (DC sets bit 7 of last char)
@@ -353,7 +353,7 @@
  333:				;-------------------------------
  334:				; ? ( addr -- )
  335:				;-------------------------------
- 336:				; Print address contents (code from the Jupiter Ace Manual)
+ 336:				; Print variable value (code from the Jupiter Ace Manual)
  337:				; : ? @ . ;
  338:     -	3029          	questionName:
  339:     -	3029  BF      	    .DC    "?"         ; Name Field: (DC sets bit 7 of last char)
@@ -369,7 +369,7 @@
  349:				;-------------------------------
  350:				; CMOVE ( addr1 addr2 n -- )
  351:				;-------------------------------
- 352:				; Copy 'n' bytes from 'addr1' to 'addr2'
+ 352:				; Move 'n' bytes from 'addr1' to 'addr2'
  353:     -	3035          	cmoveName:
  354:     -	3035  434D4F56	    .DC    "CMOVE"       ; Name Fieldh (DC sets bit 7 of last char)
 	              C5
@@ -378,906 +378,936 @@
  357:     -	303C  05      	    .BYTE  $ - cmoveName - 2  ; Name Length Field
  358:     -	303D  3F30    	    .WORD  $ + 2              ; Code Field
  359:				    ;----------
- 360:					;***** TODO: make it work with overlaping addresses
- 361: 1228+17	303F  CD4E08  		CALL  forthPopBC   ; BC = bytes to move (from Top of Stack)
- 362: 1245+11	C168  DF      	    FORTHpop           ; Get destination address from Top of Stack to DE
- 363: 1256+11	3043  D5      		PUSH  DE           ; Save Destination address
- 364: 1267+11	C16A  DF      		FORTHpop           ; Get source address from Top of Stack to DE
- 365: 1278+4	3045  EB      		EX    DE,HL        ; HL = Source address
- 366: 1282+10	3046  D1      		POP   DE           ; DE = Destination address
- 367: 1292+8	3047  CB78    		BIT   7,B          ; check if negative length
- 368: 1300+7+5	3049  2002    		JR    NZ,cmoveExit ; Exit if so
- 369:				
- 370: 1307+16+5	304B  EDB0    		LDIR               ; Copy bytes moving up  
- 371:     -	304D          	cmoveExit:
- 372: 1323+8	C173  FDE9    	    FORTHreturn        ; Return back to FORTH
- 373:				
- 374:				;-------------------------------
- 375:				; FILL ( addr n c -- )
- 376:				;-------------------------------
- 377:				; Fill 'n' bytes with 'c' value starting from 'addr'
- 378:     -	304F          	fillName:
- 379:     -	304F  46494CCC	    .DC    "FILL"     ; Name Fieldh (DC sets bit 7 of last char)
- 380:     -	3053  3C30    	    .WORD  cmoveLink  ; Link Field: previous defined word in vocabulary
- 381:     -	3055          	fillLink:
- 382:     -	3055  04      	    .BYTE  $ - fillName - 2  ; Name Length Field
- 383:     -	3056  5830    	    .WORD  $ + 2             ; Code Field
- 384:				    ;----------
- 385: 1331+11	C17E  DF      		FORTHpop          ; pop E = 'c' (D is irrelevant)
- 386: 1342+4	3059  7B      	    LD    A,E         ; save 'c'
- 387: 1346+17	305A  CD4E08  		CALL  forthPopBC  ; BC = 'n' (byte counter)
- 388: 1363+11	C183  DF      		FORTHpop          ; pop DE = 'addr'
- 389: 1374+4	305E  EB      		EX    DE,HL       ; HL = 'addr'
- 390: 1378+4	305F  5F      		LD    E,A         ; E = 'c'
- 391:				
- 392: 1382+4	3060  78      	    LD    A,B         ; Check if 'n' is zero
- 393: 1386+4	3061  B1      	    OR    C
- 394: 1390+7+5	3062  2807    		JR    Z,fillExit  ; If 'n' = 0 , exit
- 395:     -	3064          	fillLoop:
- 396: 1397+7	3064  73      	    LD    (HL),E      ; fill memory with 'c'
- 397: 1404+6	3065  23      	    INC   HL          ; next destination address
- 398: 1410+6	3066  0B      		DEC   BC          ; Byte Count
- 399: 1416+4	3067  78      		LD    A,B         ; Finished?
- 400: 1420+4	3068  B1      		OR    C
- 401: 1424+7+5	3069  20F9    	    JR    NZ,fillLoop ; Repeat 'n' times
- 402:     -	306B          	fillExit:
- 403: 1431+8	C191  FDE9    	    FORTHreturn       ; Return back to FORTH
- 404:				
- 405:				;-------------------------------
- 406:				; DEPTH ( -- n )
- 407:				;-------------------------------
- 408:				; Data Stack Depth (code from the Jupiter Ace Manual)
- 409:				; : DEPTH  15419 @ HERE 12 + - 2 / ;
- 410:     -	306D          	depthName:
- 411:     -	306D  44455054	    .DC    "DEPTH"      ; Name Field: (DC sets bit 7 of last char)
+ 360: 1228+17	303F  CD4E08  		CALL  forthPopBC   ; BC = bytes to move (from Top of Stack)
+ 361: 1245+11	C168  DF      	    FORTHpop           ; Get destination address from Top of Stack to DE
+ 362: 1256+11	3043  D5      		PUSH  DE           ; Save Destination address
+ 363: 1267+11	C16A  DF      		FORTHpop           ; Get source address from Top of Stack to DE
+ 364: 1278+4	3045  EB      		EX    DE,HL        ; HL = Source address
+ 365: 1282+10	3046  D1      		POP   DE           ; DE = Destination address
+ 366: 1292+17	3047  CD5F32  	    CALL  cmove        ; Move Data Block
+ 367: 1309+8	C170  FDE9    	    FORTHreturn        ; Return back to FORTH
+ 368:				
+ 369:				;-------------------------------
+ 370:				; FILL ( addr n c -- )
+ 371:				;-------------------------------
+ 372:				; Fill 'n' bytes with 'c' value starting from 'addr'
+ 373:     -	304C          	fillName:
+ 374:     -	304C  46494CCC	    .DC    "FILL"     ; Name Fieldh (DC sets bit 7 of last char)
+ 375:     -	3050  3C30    	    .WORD  cmoveLink  ; Link Field: previous defined word in vocabulary
+ 376:     -	3052          	fillLink:
+ 377:     -	3052  04      	    .BYTE  $ - fillName - 2  ; Name Length Field
+ 378:     -	3053  5530    	    .WORD  $ + 2             ; Code Field
+ 379:				    ;----------
+ 380: 1317+11	C17B  DF      		FORTHpop          ; pop E = 'c' (D is irrelevant)
+ 381: 1328+4	3056  7B      	    LD    A,E         ; save 'c'
+ 382: 1332+17	3057  CD4E08  		CALL  forthPopBC  ; BC = 'n' (byte counter)
+ 383: 1349+11	C180  DF      		FORTHpop          ; pop DE = 'addr'
+ 384: 1360+4	305B  EB      		EX    DE,HL       ; HL = 'addr'
+ 385: 1364+4	305C  5F      		LD    E,A         ; E = 'c'
+ 386: 1368+17	305D  CD5732  	    CALL  fill        ; Fill memory block
+ 387: 1385+8	C186  FDE9    	    FORTHreturn       ; Return back to FORTH
+ 388:				
+ 389:				;-------------------------------
+ 390:				; DEPTH ( -- n )
+ 391:				;-------------------------------
+ 392:				; Data Stack Depth (code from the Jupiter Ace Manual)
+ 393:				; : DEPTH  15419 @ HERE 12 + - 2 / ;
+ 394:     -	3062          	depthName:
+ 395:     -	3062  44455054	    .DC    "DEPTH"      ; Name Field: (DC sets bit 7 of last char)
 	              C8
- 412:     -	3072  5530    	    .WORD  fillLink     ; Link Field: point to previous word Name Length Field
- 413:     -	3074          	depthLink:
- 414:     -	3074  05      	    .BYTE  $ - depthName - 2  ; Name Length Field
- 415:     -	3075  C30E    	    .WORD  CF_DO_COLON        ; Code Field Address: a FORTH word
- 416:				    ;----------
- 417:     -	3077  1110    	    .WORD  F_STK_WORD       ; SPARE system variable
- 418:     -	3079  3B3C    		.WORD  SPARE     
- 419:     -	307B  B308    		.WORD  F_FETCH          ; @
- 420:     -	307D  6004    	    .WORD  F_HERE           ; HERE
- 421:     -	307F  1110    		.WORD  F_STK_WORD       ; 12
- 422:     -	3081  0C00    	    .WORD  12        
- 423:     -	3083  D20D    		.WORD  F_PLUS           ; +
- 424:     -	3085  E10D    		.WORD  F_MINUS          ; -
- 425:     -	3087  1110    		.WORD  F_STK_WORD       ; 2
- 426:     -	3089  0200    		.WORD  2         
- 427:     -	308B  510D    	    .WORD  F_DIV            ; /
- 428:     -	308D  B604    	    .WORD  F_SEMICOLON      ; ; (end Forth word definition)	
- 429:				
- 430:				;-------------------------------
- 431:				;***** To Do: More Words to add *****
- 432:				;-------------------------------
- 433:				; ( from the Ace Manual )
- 434:				; : KEY ( -- c )  BEGIN INKEY ?DUP UNTIL ;
- 435:				; : ' ( -- n )  FIND 2+ ;
- 436:				; : .S ( print data stack contents )
- 437:				;   15419 @ HERE 12 +
- 438:				;   OVER OVER -
- 439:				;   IF  ( if stack not empty )
- 440:				;     DO
- 441:				;       I @ . 2
- 442:				;     +LOOP
- 443:				;   ELSE  ( stack is empty)
- 444:				;     DROP DROP
- 445:				;   THEN
- 446:				; ;
- 447:				; (others not from the manual
- 448:				; -TRAILING
+ 396:     -	3067  5230    	    .WORD  fillLink     ; Link Field: point to previous word Name Length Field
+ 397:     -	3069          	depthLink:
+ 398:     -	3069  05      	    .BYTE  $ - depthName - 2  ; Name Length Field
+ 399:     -	306A  C30E    	    .WORD  CF_DO_COLON        ; Code Field Address: a FORTH word
+ 400:				    ;----------
+ 401:     -	306C  1110    	    .WORD  F_STK_WORD       ; SPARE system variable
+ 402:     -	306E  3B3C    		.WORD  SPARE     
+ 403:     -	3070  B308    		.WORD  F_FETCH          ; @
+ 404:     -	3072  6004    	    .WORD  F_HERE           ; HERE
+ 405:     -	3074  1110    		.WORD  F_STK_WORD       ; 12
+ 406:     -	3076  0C00    	    .WORD  12        
+ 407:     -	3078  D20D    		.WORD  F_PLUS           ; +
+ 408:     -	307A  E10D    		.WORD  F_MINUS          ; -
+ 409:     -	307C  1110    		.WORD  F_STK_WORD       ; 2
+ 410:     -	307E  0200    		.WORD  2         
+ 411:     -	3080  510D    	    .WORD  F_DIV            ; /
+ 412:     -	3082  B604    	    .WORD  F_SEMICOLON      ; ; (end Forth word definition)	
+ 413:				
+ 414:				;-------------------------------
+ 415:				;***** To Do: FORTH Words to add *****
+ 416:				;-------------------------------
+ 417:				; -TRAILING
+ 418:				; ( from the Ace Manual )
+ 419:				; : KEY ( -- c )  BEGIN INKEY ?DUP UNTIL ;
+ 420:				; : ' ( -- n )  FIND 2+ ;
+ 421:				; : .S ( print data stack contents )
+ 422:				;   15419 @ HERE 12 +
+ 423:				;   OVER OVER -
+ 424:				;   IF  ( if stack not empty )
+ 425:				;     DO
+ 426:				;       I @ . 2
+ 427:				;     +LOOP
+ 428:				;   ELSE  ( stack is empty)
+ 429:				;     DROP DROP
+ 430:				;   THEN
+ 431:				; ;
+ 432:					
+ 433:				;-------------------------------
+ 434:				; HEX ( -- )
+ 435:				;-------------------------------
+ 436:				; Change numeric base to Hexadecimal
+ 437:     -	3084          	hexName:
+ 438:     -	3084  4845D8  	    .DC    "HEX"         ; Name Field: (DC sets bit 7 of last char)
+ 439:     -	3087  6930    	    .WORD  depthLink     ; Link Field: point to previous word Name Length Field
+ 440:     -	3089          	hexLink:
+ 441:     -	3089  03      	    .BYTE  $ - hexName - 2  ; Name Length Field
+ 442:     -	308A  C30E    	    .WORD  CF_DO_COLON      ; Code Field Address: a FORTH word
+ 443:				    ;----------
+ 444:     -	308C  4B10    	    .WORD  F_STK_BYTE       ; push following byte to Data Stack
+ 445:     -	308E  10      		.BYTE  16
+ 446:     -	308F  8A04    	    .WORD  F_BASE           ; BASE
+ 447:     -	3091  A508    	    .WORD  F_CSTORE         ; C!
+ 448:     -	3093  B604    	    .WORD  F_SEMICOLON      ; ; (end Forth word definition)
  449:					
  450:				;-------------------------------
- 451:				; HEX ( -- )
+ 451:				; PSG! ( c reg -- )
  452:				;-------------------------------
- 453:				; Change numeric base to Hexadecimal
- 454:     -	308F          	hexName:
- 455:     -	308F  4845D8  	    .DC    "HEX"         ; Name Field: (DC sets bit 7 of last char)
- 456:     -	3092  7430    	    .WORD  depthLink     ; Link Field: point to previous word Name Length Field
- 457:     -	3094          	hexLink:
- 458:     -	3094  03      	    .BYTE  $ - hexName - 2  ; Name Length Field
- 459:     -	3095  C30E    	    .WORD  CF_DO_COLON      ; Code Field Address: a FORTH word
+ 453:				; Write 'c' to PSG register 'reg'
+ 454:     -	3095          	psgwName:
+ 455:     -	3095  505347A1	    .DC    "PSG!"       ; Name Fieldh (DC sets bit 7 of last char)
+ 456:     -	3099  8930    	    .WORD  hexLink      ; Link Field: point to previous word Name Length Field
+ 457:     -	309B          	psgwLink:
+ 458:     -	309B  04      	    .BYTE  $ - psgwName - 2  ; Name Length Field
+ 459:     -	309C  9E30    	    .WORD  $ + 2             ; Code Field
  460:				    ;----------
- 461:     -	3097  4B10    	    .WORD  F_STK_BYTE       ; push following byte to Data Stack
- 462:     -	3099  10      		.BYTE  16
- 463:     -	309A  8A04    	    .WORD  F_BASE           ; BASE
- 464:     -	309C  A508    	    .WORD  F_CSTORE         ; C!
- 465:     -	309E  B604    	    .WORD  F_SEMICOLON      ; ; (end Forth word definition)
- 466:					
- 467:				;-------------------------------
- 468:				; PSG! ( c reg -- )
- 469:				;-------------------------------
- 470:				; Write 'c' to PSG register 'reg'
- 471:     -	30A0          	psgwName:
- 472:     -	30A0  505347A1	    .DC    "PSG!"       ; Name Fieldh (DC sets bit 7 of last char)
- 473:     -	30A4  9430    	    .WORD  hexLink      ; Link Field: point to previous word Name Length Field
- 474:     -	30A6          	psgwLink:
- 475:     -	30A6  04      	    .BYTE  $ - psgwName - 2  ; Name Length Field
- 476:     -	30A7  A930    	    .WORD  $ + 2             ; Code Field
- 477:				    ;----------
- 478: 1439+11	C1CF  DF      	    FORTHpop         ; Pop DE from FORTH data stack
- 479: 1450+4	30AA  7B      	    LD   A,E         ; Use only the lower byte
- 480: 1454+11	30AB  D3FD    	    OUT  (PSG_REG),A ; Select PSG register
- 481:				
- 482: 1465+11	C1D3  DF      	    FORTHpop         ; Pop DE from FORTH data stack
- 483: 1476+4	30AE  7B      	    LD   A,E         ; Use only the lower byte
- 484: 1480+11	30AF  D3FF    	    OUT  (PSG_VAL),A ; Set selected PSG register value
- 485: 1491+8	C1D7  FDE9    	    FORTHreturn      ; Return to FORTH
- 486:				
- 487:				;-------------------------------
- 488:				; PSG@ ( reg -- c )
- 489:				;-------------------------------
- 490:				; Read PSG register 'reg' contents
- 491:     -	30B3          	psgrName:
- 492:     -	30B3  505347C0	    .DC    "PSG@"     ; Name Fieldh (DC sets bit 7 of last char)
- 493:     -	30B7  A630    	    .WORD  psgwLink   ; Link Field: previous defined word in vocabulary
- 494:     -	30B9          	psgrLink:
- 495:     -	30B9  04      	    .BYTE  $ - psgrName - 2  ; Name Length Field
- 496:     -	30BA  BC30    	    .WORD  $ + 2             ; Code Field
- 497:				    ;----------
- 498: 1499+11	C1E2  DF      	    FORTHpop         ; Pop DE from FORTH data stack
- 499: 1510+4	30BD  7B      	    LD   A,E         ; Use only the lower byte
- 500: 1514+11	30BE  D3FD    	    OUT  (PSG_REG),A ; Select PSG register
- 501: 1525+11	30C0  DBFF    	    IN   A,(PSG_VAL) ; Read selected PSG register
- 502: 1536+4	30C2  5F      	    LD   E,A         ; Data is a single byte
- 503: 1540+4	30C3  AF      	    XOR  A           ; Clear D
- 504: 1544+4	30C4  57      	    LD   D,A
- 505: 1548+11	C1EB  D7      	    FORTHpush        ; Push DE to FORTH data stack
- 506: 1559+8	C1EC  FDE9    	    FORTHreturn      ; Return to FORTH
- 507:				
- 508:				;-------------------------------
- 509:				; MPAGE ( c -- )
- 510:				;-------------------------------
- 511:				; Select memory page 'c' , 0 to 3
- 512:     -	30C8          	mpageName:
- 513:     -	30C8  4D504147	    .DC    "MPAGE"    ; Name Fieldh (DC sets bit 7 of last char)
+ 461: 1393+11	C1C4  DF      	    FORTHpop         ; Pop DE from FORTH data stack
+ 462: 1404+4	309F  7B      	    LD   A,E         ; Use only the lower byte
+ 463: 1408+11	30A0  D3FD    	    OUT  (PSG_REG),A ; Select PSG register
+ 464:				
+ 465: 1419+11	C1C8  DF      	    FORTHpop         ; Pop DE from FORTH data stack
+ 466: 1430+4	30A3  7B      	    LD   A,E         ; Use only the lower byte
+ 467: 1434+11	30A4  D3FF    	    OUT  (PSG_VAL),A ; Set selected PSG register value
+ 468: 1445+8	C1CC  FDE9    	    FORTHreturn      ; Return to FORTH
+ 469:				
+ 470:				;-------------------------------
+ 471:				; PSG@ ( reg -- c )
+ 472:				;-------------------------------
+ 473:				; Read PSG register 'reg' contents
+ 474:     -	30A8          	psgrName:
+ 475:     -	30A8  505347C0	    .DC    "PSG@"     ; Name Fieldh (DC sets bit 7 of last char)
+ 476:     -	30AC  9B30    	    .WORD  psgwLink   ; Link Field: previous defined word in vocabulary
+ 477:     -	30AE          	psgrLink:
+ 478:     -	30AE  04      	    .BYTE  $ - psgrName - 2  ; Name Length Field
+ 479:     -	30AF  B130    	    .WORD  $ + 2             ; Code Field
+ 480:				    ;----------
+ 481: 1453+11	C1D7  DF      	    FORTHpop         ; Pop DE from FORTH data stack
+ 482: 1464+4	30B2  7B      	    LD   A,E         ; Use only the lower byte
+ 483: 1468+11	30B3  D3FD    	    OUT  (PSG_REG),A ; Select PSG register
+ 484: 1479+11	30B5  DBFF    	    IN   A,(PSG_VAL) ; Read selected PSG register
+ 485: 1490+4	30B7  5F      	    LD   E,A         ; Data is a single byte
+ 486: 1494+4	30B8  AF      	    XOR  A           ; Clear D
+ 487: 1498+4	30B9  57      	    LD   D,A
+ 488: 1502+11	C1E0  D7      	    FORTHpush        ; Push DE to FORTH data stack
+ 489: 1513+8	C1E1  FDE9    	    FORTHreturn      ; Return to FORTH
+ 490:				
+ 491:				;-------------------------------
+ 492:				; MPAGE ( c -- )
+ 493:				;-------------------------------
+ 494:				; Select memory page 'c' , 0 to 3
+ 495:     -	30BD          	mpageName:
+ 496:     -	30BD  4D504147	    .DC    "MPAGE"    ; Name Fieldh (DC sets bit 7 of last char)
 	              C5
- 514:     -	30CD  B930    	    .WORD  psgrLink   ; Link Field: previous defined word in vocabulary
- 515:     -	30CF          	mpageLink:
- 516:     -	30CF  05      	    .BYTE  $ - mpageName - 2  ; Name Length Field
- 517:     -	30D0  D230    	    .WORD  $ + 2              ; Code Field
- 518:				    ;----------
- 519: 1567+7	30D2  3E0F    	    LD    A,PSGportB   ; Select PSG Port B Register
- 520: 1574+11	30D4  D3FD    	    OUT   (PSG_REG),A
- 521: 1585+11	30D6  DBFF    	    IN    A,(PSG_VAL)  ; Read PSG Port B
- 522: 1596+7	30D8  E6FC    	    AND   11111100b    ; mask out mem page bits
- 523: 1603+4	30DA  4F      	    LD    C,A          ; save BORDER color, screen page and char set
- 524:				    
- 525: 1607+11	C201  DF      	    FORTHpop           ; Pop DE from FORTH data stack
- 526: 1618+4	30DC  7B      	    LD    A,E          ; memory page
- 527: 1622+7	30DD  E603    	    AND   00000011b    ; limit memory paging to 0..3
- 528: 1629+4	30DF  B1      	    OR    C            ; combine with saved BORDER color, screen page and char set
- 529: 1633+11	30E0  D3FF    	    OUT   (PSG_VAL),A  ; Write to PSG Port B
- 530: 1644+8	C208  FDE9    	    FORTHreturn        ; Return to FORTH
- 531:				
- 532:				;-------------------------------
- 533:				; SCREEN ( c --  )
- 534:				;-------------------------------
- 535:				; Select Screen page 'c' , 0 or 1
- 536:     -	30E4          	screenName:
- 537:     -	30E4  53435245	    .DC    "SCREEN"   ; Name Fieldh (DC sets bit 7 of last char)
+ 497:     -	30C2  AE30    	    .WORD  psgrLink   ; Link Field: previous defined word in vocabulary
+ 498:     -	30C4          	mpageLink:
+ 499:     -	30C4  05      	    .BYTE  $ - mpageName - 2  ; Name Length Field
+ 500:     -	30C5  C730    	    .WORD  $ + 2              ; Code Field
+ 501:				    ;----------
+ 502: 1521+7	30C7  3E0F    	    LD    A,PSGportB   ; Select PSG Port B Register
+ 503: 1528+11	30C9  D3FD    	    OUT   (PSG_REG),A
+ 504: 1539+11	30CB  DBFF    	    IN    A,(PSG_VAL)  ; Read PSG Port B
+ 505: 1550+7	30CD  E6FC    	    AND   11111100b    ; mask out mem page bits
+ 506: 1557+4	30CF  4F      	    LD    C,A          ; save BORDER color, screen page and char set
+ 507:				    
+ 508: 1561+11	C1F6  DF      	    FORTHpop           ; Pop DE from FORTH data stack
+ 509: 1572+4	30D1  7B      	    LD    A,E          ; memory page
+ 510: 1576+7	30D2  E603    	    AND   00000011b    ; limit memory paging to 0..3
+ 511: 1583+4	30D4  B1      	    OR    C            ; combine with saved BORDER color, screen page and char set
+ 512: 1587+11	30D5  D3FF    	    OUT   (PSG_VAL),A  ; Write to PSG Port B
+ 513: 1598+8	C1FD  FDE9    	    FORTHreturn        ; Return to FORTH
+ 514:				
+ 515:				;-------------------------------
+ 516:				; SCREEN ( c --  )
+ 517:				;-------------------------------
+ 518:				; Select Screen page 'c' , 0 or 1
+ 519:     -	30D9          	screenName:
+ 520:     -	30D9  53435245	    .DC    "SCREEN"   ; Name Fieldh (DC sets bit 7 of last char)
 	              45CE
- 538:     -	30EA  CF30    	    .WORD  mpageLink  ; Link Field: previous defined word in vocabulary
- 539:     -	30EC          	screenLink:
- 540:     -	30EC  06      	    .BYTE  $ - screenName - 2  ; Name Length Field
- 541:     -	30ED  EF30    	    .WORD  $ + 2               ; Code Field
- 542:				    ;----------
- 543: 1652+7	30EF  3E0F    	    LD   A,PSGportB   ; Select PSG Port B Register
- 544: 1659+11	30F1  D3FD    	    OUT  (PSG_REG),A
- 545: 1670+11	30F3  DBFF    	    IN   A,(PSG_VAL)  ; Read PSG Port B value
- 546: 1681+7	30F5  E6FB    	    AND  11111011b    ; mask out Screen page bit 
- 547: 1688+4	30F7  4F      	    LD   C,A          ; save BORDER color, memory and char set paging
- 548:				    
- 549: 1692+11	C21E  DF      	    FORTHpop          ; Pop DE from FORTH data stack
- 550: 1703+4	30F9  7B      	    LD   A,E          ; screen page
- 551: 1707+7	30FA  E601    	    AND  00000001b    ; limit Screen page to 0 or 1
- 552: 1714+8	30FC  CB27    	    SLA  A            ; move to bit-2 position
- 553: 1722+8	30FE  CB27    	    SLA  A
- 554: 1730+4	3100  B1      	    OR   C            ; combine with saved BORDER color, memory page and char set
- 555: 1734+11	3101  D3FF    	    OUT  (PSG_VAL),A  ; Write to PSG Port B
- 556: 1745+8	C229  FDE9    	    FORTHreturn       ; Return to FORTH
- 557:				
- 558:				;-------------------------------
- 559:				; FONT ( c --  )
- 560:				;-------------------------------
- 561:				; Select character set 'c' , 0 or 1
- 562:     -	3105          	fontName:
- 563:     -	3105  464F4ED4	    .DC    "FONT"     ; Name Fieldh (DC sets bit 7 of last char)
- 564:     -	3109  EC30    	    .WORD  screenLink ; Link Field: previous defined word in vocabulary
- 565:     -	310B          	fontLink:
- 566:     -	310B  04      	    .BYTE  $ - fontName - 2  ; Name Length Field
- 567:     -	310C  0E31    	    .WORD  $ + 2             ; Code Field
- 568:				    ;----------
- 569: 1753+7	310E  3E0F    	    LD   A,PSGportB   ; Select PSG Port B Register
- 570: 1760+11	3110  D3FD    	    OUT  (PSG_REG),A
- 571: 1771+11	3112  DBFF    	    IN   A,(PSG_VAL)  ; Read PSG Port B value
- 572: 1782+7	3114  E6F7    	    AND  11110111b    ; mask out char set bit 
- 573: 1789+4	3116  4F      	    LD   C,A          ; save BORDER color, memory and screen pages
- 574:				    
- 575: 1793+11	C23D  DF      	    FORTHpop          ; Pop DE from FORTH data stack
- 576: 1804+4	3118  7B      	    LD   A,E          ; character set
- 577: 1808+7	3119  E601    	    AND  00000001b    ; limit Character Set paging to 0 or 1
- 578: 1815+8	311B  CB27    	    SLA  A            ; move to bit-3 position
- 579: 1823+8	311D  CB27    	    SLA  A
- 580: 1831+8	311F  CB27    	    SLA  A
- 581: 1839+4	3121  B1      	    OR   C            ; combine with saved BORDER color, memory and screen pages
- 582: 1843+11	3122  D3FF    	    OUT  (PSG_VAL),A  ; Write to PSG Port B
- 583: 1854+8	C24A  FDE9    	    FORTHreturn       ; Return to FORTH
- 584:				
- 585:				;-------------------------------
- 586:				; BAUD ( n --  )
- 587:				;-------------------------------
- 588:				; Initialize UART with baud rate 'n'
- 589:     -	3126          	baudName:
- 590:     -	3126  424155C4	    .DC    "BAUD"    ; Name Fieldh (DC sets bit 7 of last char)
- 591:     -	312A  0B31    	    .WORD  fontLink  ; Link Field: previous defined word in vocabulary
- 592:     -	312C          	baudLink:
- 593:     -	312C  04      	    .BYTE  $ - baudName - 2  ; Name Length Field
- 594:     -	312D  C30E    	    .WORD  CF_DO_COLON       ; Code Field
- 595:				    ;----------
- 596:     -	312F  4B10    		.WORD  F_STK_BYTE   ; 10
- 597:     -	3131  0A      		.BYTE  10
- 598:     -	3132  510D    		.WORD  F_DIV        ; /
- 599:     -	3134  1110    		.WORD  F_STK_WORD   ; 23040
- 600:     -	3136  005A    	    .WORD  23040
- 601:     -	3138  8508    	    .WORD  F_SWAP       ; SWAP	
- 602:     -	313A  510D    	    .WORD  F_DIV        ; /  (result is baud divider)
- 603:     -	313C  0E1A    		.WORD  DOCODE       ; execute following Asm code
- 604: 1862+17	313E  CD4E08  		CALL   forthPopBC   ; BC = UART Baud rate divisor
- 605: 1879+17	3141  CD6232  		CALL   UartSet      ; UART setup
- 606: 1896+8	C26A  FDE9    	    FORTHreturn         ; Return back to FORTH
- 607:				
- 608:				;-------------------------------
- 609:				; TX ( addr n --  )
+ 521:     -	30DF  C430    	    .WORD  mpageLink  ; Link Field: previous defined word in vocabulary
+ 522:     -	30E1          	screenLink:
+ 523:     -	30E1  06      	    .BYTE  $ - screenName - 2  ; Name Length Field
+ 524:     -	30E2  E430    	    .WORD  $ + 2               ; Code Field
+ 525:				    ;----------
+ 526: 1606+7	30E4  3E0F    	    LD   A,PSGportB   ; Select PSG Port B Register
+ 527: 1613+11	30E6  D3FD    	    OUT  (PSG_REG),A
+ 528: 1624+11	30E8  DBFF    	    IN   A,(PSG_VAL)  ; Read PSG Port B value
+ 529: 1635+7	30EA  E6FB    	    AND  11111011b    ; mask out Screen page bit 
+ 530: 1642+4	30EC  4F      	    LD   C,A          ; save BORDER color, memory and char set paging
+ 531:				    
+ 532: 1646+11	C213  DF      	    FORTHpop          ; Pop DE from FORTH data stack
+ 533: 1657+4	30EE  7B      	    LD   A,E          ; screen page
+ 534: 1661+7	30EF  E601    	    AND  00000001b    ; limit Screen page to 0 or 1
+ 535: 1668+8	30F1  CB27    	    SLA  A            ; move to bit-2 position
+ 536: 1676+8	30F3  CB27    	    SLA  A
+ 537: 1684+4	30F5  B1      	    OR   C            ; combine with saved BORDER color, memory page and char set
+ 538: 1688+11	30F6  D3FF    	    OUT  (PSG_VAL),A  ; Write to PSG Port B
+ 539: 1699+8	C21E  FDE9    	    FORTHreturn       ; Return to FORTH
+ 540:				
+ 541:				;-------------------------------
+ 542:				; FONT ( c --  )
+ 543:				;-------------------------------
+ 544:				; Select character set 'c' , 0 or 1
+ 545:     -	30FA          	fontName:
+ 546:     -	30FA  464F4ED4	    .DC    "FONT"     ; Name Fieldh (DC sets bit 7 of last char)
+ 547:     -	30FE  E130    	    .WORD  screenLink ; Link Field: previous defined word in vocabulary
+ 548:     -	3100          	fontLink:
+ 549:     -	3100  04      	    .BYTE  $ - fontName - 2  ; Name Length Field
+ 550:     -	3101  0331    	    .WORD  $ + 2             ; Code Field
+ 551:				    ;----------
+ 552: 1707+7	3103  3E0F    	    LD   A,PSGportB   ; Select PSG Port B Register
+ 553: 1714+11	3105  D3FD    	    OUT  (PSG_REG),A
+ 554: 1725+11	3107  DBFF    	    IN   A,(PSG_VAL)  ; Read PSG Port B value
+ 555: 1736+7	3109  E6F7    	    AND  11110111b    ; mask out char set bit 
+ 556: 1743+4	310B  4F      	    LD   C,A          ; save BORDER color, memory and screen pages
+ 557:				    
+ 558: 1747+11	C232  DF      	    FORTHpop          ; Pop DE from FORTH data stack
+ 559: 1758+4	310D  7B      	    LD   A,E          ; character set
+ 560: 1762+7	310E  E601    	    AND  00000001b    ; limit Character Set paging to 0 or 1
+ 561: 1769+8	3110  CB27    	    SLA  A            ; move to bit-3 position
+ 562: 1777+8	3112  CB27    	    SLA  A
+ 563: 1785+8	3114  CB27    	    SLA  A
+ 564: 1793+4	3116  B1      	    OR   C            ; combine with saved BORDER color, memory and screen pages
+ 565: 1797+11	3117  D3FF    	    OUT  (PSG_VAL),A  ; Write to PSG Port B
+ 566: 1808+8	C23F  FDE9    	    FORTHreturn       ; Return to FORTH
+ 567:				
+ 568:				;-------------------------------
+ 569:				; BAUD ( n --  )
+ 570:				;-------------------------------
+ 571:				; Set UART to Baud rate 'n'
+ 572:     -	311B          	baudName:
+ 573:     -	311B  424155C4	    .DC    "BAUD"    ; Name Fieldh (DC sets bit 7 of last char)
+ 574:     -	311F  0031    	    .WORD  fontLink  ; Link Field: previous defined word in vocabulary
+ 575:     -	3121          	baudLink:
+ 576:     -	3121  04      	    .BYTE  $ - baudName - 2  ; Name Length Field
+ 577:     -	3122  C30E    	    .WORD  CF_DO_COLON       ; Code Field
+ 578:				    ;----------
+ 579:     -	3124  4B10    		.WORD  F_STK_BYTE   ; 10
+ 580:     -	3126  0A      		.BYTE  10
+ 581:     -	3127  510D    		.WORD  F_DIV        ; /
+ 582:     -	3129  1110    		.WORD  F_STK_WORD   ; 23040
+ 583:     -	312B  005A    	    .WORD  23040
+ 584:     -	312D  8508    	    .WORD  F_SWAP       ; SWAP	
+ 585:     -	312F  510D    	    .WORD  F_DIV        ; /  (result is baud divider)
+ 586:     -	3131  0E1A    		.WORD  DOCODE       ; execute following Asm code
+ 587: 1816+17	3133  CD4E08  		CALL   forthPopBC   ; BC = UART Baud rate divisor
+ 588: 1833+17	3136  CD7A32  		CALL   UartSet      ; UART setup
+ 589: 1850+8	C25F  FDE9    	    FORTHreturn         ; Return back to FORTH
+ 590:				
+ 591:				;-------------------------------
+ 592:				; TX ( addr n --  )
+ 593:				;-------------------------------
+ 594:				; Transmit 'n' bytes from 'addr' to serial line
+ 595:     -	313B          	txName:
+ 596:     -	313B  54D8    	    .DC    "TX"      ; Name Fieldh (DC sets bit 7 of last char)
+ 597:     -	313D  2131    	    .WORD  baudLink  ; Link Field: previous defined word in vocabulary
+ 598:     -	313F          	txLink:
+ 599:     -	313F  02      	    .BYTE  $ - txName - 2  ; Name Length Field
+ 600:     -	3140  4231    	    .WORD  $ + 2           ; Code Field
+ 601:				    ;----------
+ 602: 1858+17	3142  CD4E08  		CALL   forthPopBC      ; pop BC = 'n' from Data Stack
+ 603: 1875+11	C26B  DF      		FORTHpop               ; pop DE = 'addr' from data stack
+ 604: 1886+4	3146  EB      		EX     DE,HL           ; HL = 'addr' = Starting address
+ 605: 1890+4	3147  50      		LD     D,B             ; DE = 'n'    = Number of bytes to transmit
+ 606: 1894+4	3148  59      		LD     E,C
+ 607: 1898+17	3149  CDC732  		CALL   UartTx          ; Transmit Serial Data Block
+ 608: 1915+8	C272  FDE9    	    FORTHreturn            ; Return back to FORTH
+ 609:				
  610:				;-------------------------------
- 611:				; Transmit 'n' bytes from 'addr' to serial line
- 612:     -	3146          	txName:
- 613:     -	3146  54D8    	    .DC    "TX"      ; Name Fieldh (DC sets bit 7 of last char)
- 614:     -	3148  2C31    	    .WORD  baudLink  ; Link Field: previous defined word in vocabulary
- 615:     -	314A          	txLink:
- 616:     -	314A  02      	    .BYTE  $ - txName - 2  ; Name Length Field
- 617:     -	314B  4D31    	    .WORD  $ + 2           ; Code Field
- 618:				    ;----------
- 619: 1904+17	314D  CD4E08  		CALL   forthPopBC      ; pop BC = 'n' from Data Stack
- 620: 1921+11	C276  DF      		FORTHpop               ; pop DE = 'addr' from data stack
- 621: 1932+4	3151  EB      		EX     DE,HL           ; HL = 'addr'
- 622: 1936+4	3152  50      		LD     D,B             ; DE = 'n'
- 623: 1940+4	3153  59      		LD     E,C
- 624: 1944+17	3154  CDB032  		CALL   UartTx          ; Transmit Data Block
- 625: 1961+8	C27D  FDE9    	    FORTHreturn            ; Return back to FORTH
- 626:				
- 627:				;-------------------------------
- 628:				; RX ( addr n --  )
+ 611:				; RX ( addr n --  )
+ 612:				;-------------------------------
+ 613:				; Receive 'n' bytes from serial line to 'addr'
+ 614:     -	314E          	rxName:
+ 615:     -	314E  52D8    	    .DC    "RX"    ; Name Fieldh (DC sets bit 7 of last char)
+ 616:     -	3150  3F31    	    .WORD  txLink  ; Link Field: previous defined word in vocabulary
+ 617:     -	3152          	rxLink:
+ 618:     -	3152  02      	    .BYTE  $ - rxName - 2  ; Name Length Field
+ 619:     -	3153  5531    	    .WORD  $ + 2           ; Code Field
+ 620:				    ;----------
+ 621: 1923+17	3155  CD4E08  		CALL   forthPopBC      ; pop BC = 'n' from Data Stack
+ 622: 1940+11	C27E  DF      	    FORTHpop               ; pop DE = 'addr' from Data Stack
+ 623: 1951+4	3159  EB      		EX     DE,HL           ; HL = 'addr' = Starting address
+ 624: 1955+4	315A  50      		LD     D,B             ; DE = 'n'    = Number of bytes to receive
+ 625: 1959+4	315B  59      		LD     E,C
+ 626: 1963+17	315C  CD9C32  		CALL   UartRx          ; Receive Serial Data Block
+ 627: 1980+8	C285  FDE9    	    FORTHreturn            ; Return back to FORTH
+ 628:					
  629:				;-------------------------------
- 630:				; Receive 'n' bytes from serial line to memory 'addr'
- 631:     -	3159          	rxName:
- 632:     -	3159  52D8    	    .DC    "RX"    ; Name Fieldh (DC sets bit 7 of last char)
- 633:     -	315B  4A31    	    .WORD  txLink  ; Link Field: previous defined word in vocabulary
- 634:     -	315D          	rxLink:
- 635:     -	315D  02      	    .BYTE  $ - rxName - 2  ; Name Length Field
- 636:     -	315E  6031    	    .WORD  $ + 2           ; Code Field
- 637:				    ;----------
- 638: 1969+17	3160  CD4E08  		CALL   forthPopBC      ; pop BC = 'n' from Data Stack
- 639: 1986+11	C289  DF      	    FORTHpop               ; pop DE = 'addr' from Data Stack
- 640: 1997+4	3164  EB      		EX     DE,HL           ; HL = 'addr'
- 641: 2001+4	3165  50      		LD     D,B             ; DE = 'n'
- 642: 2005+4	3166  59      		LD     E,C
- 643: 2009+17	3167  CD8432  		CALL   UartRx          ; Receive Data Block
- 644: 2026+8	C290  FDE9    	    FORTHreturn            ; Return back to FORTH
- 645:					
- 646:				;-------------------------------
- 647:				; BORDER ( c --  )
- 648:				;-------------------------------
- 649:				; Set screen BORDER to color 'c' , 0 to 15
- 650:     -	316C          	borderName:
- 651:     -	316C  424F5244	    .DC    "BORDER"  ; Name Fieldh (DC sets bit 7 of last char)
+ 630:				; BORDER ( c --  )
+ 631:				;-------------------------------
+ 632:				; Set screen BORDER to color 'c' , 0 to 15
+ 633:     -	3161          	borderName:
+ 634:     -	3161  424F5244	    .DC    "BORDER"  ; Name Fieldh (DC sets bit 7 of last char)
 	              45D2
- 652:     -	3172  5D31    	    .WORD  rxLink    ; Link Field: previous defined word in vocabulary
- 653:     -	3174          	borderLink:
- 654:     -	3174  06      	    .BYTE  $ - borderName - 2  ; Name Length Field
- 655:     -	3175  7731    	    .WORD  $ + 2               ; Code Field
- 656:				    ;----------
- 657: 2034+7	3177  3E0F    	    LD   A,PSGportB   ; Select PSG Port B Register
- 658: 2041+11	3179  D3FD    	    OUT  (PSG_REG),A
- 659: 2052+11	317B  DBFF    	    IN   A,(PSG_VAL)  ; Read PSG Port B value
- 660: 2063+7	317D  E60F    	    AND  00001111b    ; mask out BORDER color
- 661: 2070+4	317F  4F      	    LD   C,A          ; save memory and screen pages and char set
- 662:				    
- 663: 2074+11	C2A6  DF      	    FORTHpop          ; Pop DE from FORTH data stack
- 664: 2085+4	3181  7B      	    LD   A,E          ; BORDER color
- 665: 2089+8	3182  CB27    	    SLA  A            ; position BORDER color at the higher 4 bits
- 666: 2097+8	3184  CB27    	    SLA  A            ; (also limits BORDER color to 0..15)
- 667: 2105+8	3186  CB27    	    SLA  A
- 668: 2113+8	3188  CB27    	    SLA  A
- 669: 2121+4	318A  B1      	    OR   C            ; combine with saved memory and screen pages and char set
- 670: 2125+11	318B  D3FF    	    OUT  (PSG_VAL),A  ; Write back to Port A
- 671: 2136+8	C2B3  FDE9    	    FORTHreturn       ; Return back to FORTH
- 672:					
- 673:				;-------------------------------
- 674:				; INK ( c -- )
- 675:				;-------------------------------
- 676:				; Set character INK (foreground) to color 'c' , 0 to 15
- 677:     -	318F          	inkName:
- 678:     -	318F  494ECB  	    .DC    "INK"       ; Name Fieldh (DC sets bit 7 of last char)
- 679:     -	3192  7431    	    .WORD  borderLink  ; Link Field: previous defined word in vocabulary
- 680:     -	3194          	inkLink:
- 681:     -	3194  03      	    .BYTE  $ - inkName - 2  ; Name Length Field
- 682:     -	3195  9731    	    .WORD  $ + 2            ; Code Field
- 683:				    ;----------
- 684: 2144+7	3197  3E0E    	    LD   A,PSGportA   ; Select PSG Port A Register
- 685: 2151+11	3199  D3FD    	    OUT  (PSG_REG),A
- 686: 2162+11	319B  DBFF    	    IN   A,(PSG_VAL)  ; Read PSG Port A value
- 687: 2173+7	319D  E6F0    	    AND  11110000b    ; mask out current INK color
- 688: 2180+4	319F  4F      	    LD   C,A          ; save PAPER color
- 689:				    
- 690: 2184+11	C2C6  DF      	    FORTHpop          ; Pop DE from FORTH data stack
- 691: 2195+4	31A1  7B      	    LD   A,E          ; INK color
- 692: 2199+7	31A2  E60F    	    AND  00001111b    ; limit INK color to 0..15
- 693: 2206+4	31A4  B1      	    OR   C            ; combine with saved PAPER color
- 694: 2210+11	31A5  D3FF    	    OUT  (PSG_VAL),A  ; Write back to Port A
- 695: 2221+8	C2CD  FDE9    	    FORTHreturn       ; Return back to FORTH
- 696:				
- 697:				;-------------------------------
- 698:				; PAPER ( c -- )
- 699:				;-------------------------------
- 700:				; Set character PAPER (background) color to 'c' , 0 to 15
- 701:     -	31A9          	paperName:
- 702:     -	31A9  50415045	    .DC    "PAPER"    ; Name Fieldh (DC sets bit 7 of last char)
+ 635:     -	3167  5231    	    .WORD  rxLink    ; Link Field: previous defined word in vocabulary
+ 636:     -	3169          	borderLink:
+ 637:     -	3169  06      	    .BYTE  $ - borderName - 2  ; Name Length Field
+ 638:     -	316A  6C31    	    .WORD  $ + 2               ; Code Field
+ 639:				    ;----------
+ 640: 1988+7	316C  3E0F    	    LD   A,PSGportB   ; Select PSG Port B Register
+ 641: 1995+11	316E  D3FD    	    OUT  (PSG_REG),A
+ 642: 2006+11	3170  DBFF    	    IN   A,(PSG_VAL)  ; Read PSG Port B value
+ 643: 2017+7	3172  E60F    	    AND  00001111b    ; mask out BORDER color
+ 644: 2024+4	3174  4F      	    LD   C,A          ; save memory and screen pages and char set
+ 645: 2028+11	C29B  DF      	    FORTHpop          ; Pop DE from FORTH data stack
+ 646: 2039+4	3176  7B      	    LD   A,E          ; A = BORDER color
+ 647: 2043+8	3177  CB27    	    SLA  A            ; position BORDER color at the higher 4 bits
+ 648: 2051+8	3179  CB27    	    SLA  A            ; (also limiting BORDER color to 0..15)
+ 649: 2059+8	317B  CB27    	    SLA  A
+ 650: 2067+8	317D  CB27    	    SLA  A
+ 651: 2075+4	317F  B1      	    OR   C            ; combine with saved memory and screen pages and char set
+ 652: 2079+11	3180  D3FF    	    OUT  (PSG_VAL),A  ; Write back to Port A
+ 653: 2090+8	C2A8  FDE9    	    FORTHreturn       ; Return back to FORTH
+ 654:					
+ 655:				;-------------------------------
+ 656:				; INK ( c -- )
+ 657:				;-------------------------------
+ 658:				; Set character INK (foreground) to color 'c' , 0 to 15
+ 659:     -	3184          	inkName:
+ 660:     -	3184  494ECB  	    .DC    "INK"       ; Name Fieldh (DC sets bit 7 of last char)
+ 661:     -	3187  6931    	    .WORD  borderLink  ; Link Field: previous defined word in vocabulary
+ 662:     -	3189          	inkLink:
+ 663:     -	3189  03      	    .BYTE  $ - inkName - 2  ; Name Length Field
+ 664:     -	318A  8C31    	    .WORD  $ + 2            ; Code Field
+ 665:				    ;----------
+ 666: 2098+7	318C  3E0E    	    LD   A,PSGportA   ; Select PSG Port A Register
+ 667: 2105+11	318E  D3FD    	    OUT  (PSG_REG),A
+ 668: 2116+11	3190  DBFF    	    IN   A,(PSG_VAL)  ; Read PSG Port A value
+ 669: 2127+7	3192  E6F0    	    AND  11110000b    ; mask out current INK color
+ 670: 2134+4	3194  4F      	    LD   C,A          ; save PAPER color
+ 671: 2138+11	C2BB  DF      	    FORTHpop          ; Pop DE from FORTH data stack
+ 672: 2149+4	3196  7B      	    LD   A,E          ; A = INK color
+ 673: 2153+7	3197  E60F    	    AND  00001111b    ; limit INK color to 0..15
+ 674: 2160+4	3199  B1      	    OR   C            ; combine with saved PAPER color
+ 675: 2164+11	319A  D3FF    	    OUT  (PSG_VAL),A  ; Write back to Port A
+ 676: 2175+8	C2C2  FDE9    	    FORTHreturn       ; Return back to FORTH
+ 677:				
+ 678:				;-------------------------------
+ 679:				; PAPER ( c -- )
+ 680:				;-------------------------------
+ 681:				; Set character PAPER (background) color to 'c' , 0 to 15
+ 682:     -	319E          	paperName:
+ 683:     -	319E  50415045	    .DC    "PAPER"    ; Name Fieldh (DC sets bit 7 of last char)
 	              D2
- 703:     -	31AE  9431    	    .WORD  inkLink    ; Link Field: previous defined word in vocabulary
- 704:     -	31B0          	paperLink:
- 705:     -	31B0  05      	    .BYTE  $ - paperName - 2  ; Name Length Field
- 706:     -	31B1  B331    	    .WORD  $ + 2              ; Code Field
- 707:				    ;----------
- 708: 2229+7	31B3  3E0E    	    LD   A,PSGportA   ; Select PSG Port A Register
- 709: 2236+11	31B5  D3FD    	    OUT  (PSG_REG),A
- 710: 2247+11	31B7  DBFF    	    IN   A,(PSG_VAL)  ; Read PSG Port A value
- 711: 2258+7	31B9  E60F    	    AND  00001111b    ; mask out current PAPER color, preserving INK color
- 712: 2265+4	31BB  4F      	    LD   C,A          ; save INK color
- 713:				    
- 714: 2269+11	C2E2  DF      	    FORTHpop          ; Pop DE from FORTH data stack
- 715: 2280+4	31BD  7B      	    LD   A,E          ; PAPER color
- 716: 2284+8	31BE  CB27    	    SLA  A            ; position PAPER color at the higher 4 bits
- 717: 2292+8	31C0  CB27    	    SLA  A            ; (also limits PAPER color to 0..15)
- 718: 2300+8	31C2  CB27    	    SLA  A
- 719: 2308+8	31C4  CB27    	    SLA  A
- 720: 2316+4	31C6  B1      	    OR   C            ; combine with saved INK color
- 721: 2320+11	31C7  D3FF    	    OUT  (PSG_VAL),A  ; Write back to Port A
- 722: 2331+8	C2EF  FDE9    	    FORTHreturn       ; Return back to FORTH
- 723:				
- 724:				;-------------------------------
- 725:				; BLACK ( -- c )
- 726:				;-------------------------------
- 727:     -	31CB          	blackName:
- 728:     -	31CB  424C4143	    .DC    "BLACK"    ; Name Fieldh (DC sets bit 7 of last char)
+ 684:     -	31A3  8931    	    .WORD  inkLink    ; Link Field: previous defined word in vocabulary
+ 685:     -	31A5          	paperLink:
+ 686:     -	31A5  05      	    .BYTE  $ - paperName - 2  ; Name Length Field
+ 687:     -	31A6  A831    	    .WORD  $ + 2              ; Code Field
+ 688:				    ;----------
+ 689: 2183+7	31A8  3E0E    	    LD   A,PSGportA   ; Select PSG Port A Register
+ 690: 2190+11	31AA  D3FD    	    OUT  (PSG_REG),A
+ 691: 2201+11	31AC  DBFF    	    IN   A,(PSG_VAL)  ; Read PSG Port A value
+ 692: 2212+7	31AE  E60F    	    AND  00001111b    ; mask out current PAPER color, preserving INK color
+ 693: 2219+4	31B0  4F      	    LD   C,A          ; save INK color
+ 694: 2223+11	C2D7  DF      	    FORTHpop          ; Pop DE from FORTH data stack
+ 695: 2234+4	31B2  7B      	    LD   A,E          ; A = PAPER color
+ 696: 2238+8	31B3  CB27    	    SLA  A            ; position PAPER color at the higher 4 bits
+ 697: 2246+8	31B5  CB27    	    SLA  A            ; (also limits PAPER color to 0..15)
+ 698: 2254+8	31B7  CB27    	    SLA  A
+ 699: 2262+8	31B9  CB27    	    SLA  A
+ 700: 2270+4	31BB  B1      	    OR   C            ; combine with saved INK color
+ 701: 2274+11	31BC  D3FF    	    OUT  (PSG_VAL),A  ; Write back to Port A
+ 702: 2285+8	C2E4  FDE9    	    FORTHreturn       ; Return back to FORTH
+ 703:				
+ 704:				;-------------------------------
+ 705:				; BLACK ( -- c )
+ 706:				;-------------------------------
+ 707:     -	31C0          	blackName:
+ 708:     -	31C0  424C4143	    .DC    "BLACK"    ; Name Fieldh (DC sets bit 7 of last char)
 	              CB
- 729:     -	31D0  B031    	    .WORD  paperLink  ; Link Field: previous defined word in vocabulary
- 730:     -	31D2          	blackLink:
- 731:     -	31D2  05      	    .BYTE  $ - blackName - 2  ; Name Length Field
- 732:     -	31D3  D531    	    .WORD  $ + 2              ; Code Field
- 733:				    ;----------
- 734: 2339+7	31D5  1E00    		LD    E,0                 ; Black color
- 735:     -	31D7          	stackByte:
- 736: 2346+7	31D7  1600    	    LD    D,0                 ; Clear High byte
- 737: 2353+11	C2FF  D7      		FORTHpush                 ; Push DE to FORTH data stack
- 738: 2364+8	C300  FDE9    	    FORTHreturn               ; Return back to FORTH
- 739:				
- 740:				;-------------------------------
- 741:				; GREY ( -- c )
- 742:				;-------------------------------
- 743:				; 8 CONSTANT
- 744:     -	31DC          	greyName:
- 745:     -	31DC  475245D9	    .DC    "GREY"     ; Name Fieldh (DC sets bit 7 of last char)
- 746:     -	31E0  D231    	    .WORD  blackLink  ; Link Field: previous defined word in vocabulary
- 747:     -	31E2          	greyLink:
- 748:     -	31E2  04      	    .BYTE  $ - greyName - 2  ; Name Length Field
- 749:     -	31E3  E531    	    .WORD  $ + 2             ; Code Field
- 750:				    ;----------
- 751: 2372+7	31E5  1E08    	    LD    E,1000b            ; Grey color
- 752: 2379+10	31E7  C3D731  		JP    stackByte
- 753:				
- 754:				;-------------------------------
- 755:				; BLUE ( -- c )
- 756:				;-------------------------------
- 757:     -	31EA          	blueName:
- 758:     -	31EA  424C55C5	    .DC    "BLUE"     ; Name Fieldh (DC sets bit 7 of last char))
- 759:     -	31EE  E231    	    .WORD  greyLink   ; Link Field: previous defined word in vocabulary
- 760:     -	31F0          	blueLink:
- 761:     -	31F0  04      	    .BYTE  $ - blueName - 2  ; Name Length Field
- 762:     -	31F1  F331    	    .WORD  $ + 2             ; Code Field
- 763:				    ;----------
- 764: 2389+7	31F3  1E09    	    LD    E,1001b            ; Blue color
- 765: 2396+10	31F5  C3D731  		JP    stackByte
- 766:				
- 767:				;-------------------------------
- 768:				; GREEN ( -- c )
- 769:				;-------------------------------
- 770:     -	31F8          	greenName:
- 771:     -	31F8  47524545	    .DC    "GREEN"    ; Name Fieldh (DC sets bit 7 of last char)
+ 709:     -	31C5  A531    	    .WORD  paperLink  ; Link Field: previous defined word in vocabulary
+ 710:     -	31C7          	blackLink:
+ 711:     -	31C7  05      	    .BYTE  $ - blackName - 2  ; Name Length Field
+ 712:     -	31C8  CA31    	    .WORD  $ + 2              ; Code Field
+ 713:				    ;----------
+ 714: 2293+7	31CA  1E00    		LD    E,0                 ; Black color
+ 715:     -	31CC          	stackByteAndFinish:
+ 716: 2300+7	31CC  1600    	    LD    D,0                 ; Clear High byte
+ 717: 2307+11	C2F4  D7      		FORTHpush                 ; Push DE to FORTH data stack
+ 718: 2318+8	C2F5  FDE9    	    FORTHreturn               ; Return back to FORTH
+ 719:				
+ 720:				;-------------------------------
+ 721:				; GREY ( -- c )
+ 722:				;-------------------------------
+ 723:				; 8 CONSTANT
+ 724:     -	31D1          	greyName:
+ 725:     -	31D1  475245D9	    .DC    "GREY"     ; Name Fieldh (DC sets bit 7 of last char)
+ 726:     -	31D5  C731    	    .WORD  blackLink  ; Link Field: previous defined word in vocabulary
+ 727:     -	31D7          	greyLink:
+ 728:     -	31D7  04      	    .BYTE  $ - greyName - 2  ; Name Length Field
+ 729:     -	31D8  DA31    	    .WORD  $ + 2             ; Code Field
+ 730:				    ;----------
+ 731: 2326+7	31DA  1E08    	    LD    E,1000b            ; Grey color
+ 732: 2333+10	31DC  C3CC31  		JP    stackByteAndFinish
+ 733:				
+ 734:				;-------------------------------
+ 735:				; BLUE ( -- c )
+ 736:				;-------------------------------
+ 737:     -	31DF          	blueName:
+ 738:     -	31DF  424C55C5	    .DC    "BLUE"     ; Name Fieldh (DC sets bit 7 of last char))
+ 739:     -	31E3  D731    	    .WORD  greyLink   ; Link Field: previous defined word in vocabulary
+ 740:     -	31E5          	blueLink:
+ 741:     -	31E5  04      	    .BYTE  $ - blueName - 2  ; Name Length Field
+ 742:     -	31E6  E831    	    .WORD  $ + 2             ; Code Field
+ 743:				    ;----------
+ 744: 2343+7	31E8  1E09    	    LD    E,1001b            ; Blue color
+ 745: 2350+10	31EA  C3CC31  		JP    stackByteAndFinish
+ 746:				
+ 747:				;-------------------------------
+ 748:				; GREEN ( -- c )
+ 749:				;-------------------------------
+ 750:     -	31ED          	greenName:
+ 751:     -	31ED  47524545	    .DC    "GREEN"    ; Name Fieldh (DC sets bit 7 of last char)
 	              CE
- 772:     -	31FD  F031    	    .WORD  blueLink   ; Link Field: previous defined word in vocabulary
- 773:     -	31FF          	greenLink:
- 774:     -	31FF  05      	    .BYTE  $ - greenName - 2  ; Name Length Field
- 775:     -	3200  0232    	    .WORD  $ + 2              ; Code Field
- 776:				    ;----------
- 777: 2406+7	3202  1E0A    	    LD    E,1010b             ; Green color
- 778: 2413+10	3204  C3D731  		JP    stackByte
- 779:				
- 780:				;-------------------------------
- 781:				; CYAN ( -- c )
- 782:				;-------------------------------
- 783:     -	3207          	cyanName:
- 784:     -	3207  435941CE	    .DC    "CYAN"     ; Name Fieldh (DC sets bit 7 of last char)
- 785:     -	320B  FF31    	    .WORD  greenLink  ; Link Field: previous defined word in vocabulary
- 786:     -	320D          	cyanLink:
- 787:     -	320D  04      	    .BYTE  $ - cyanName - 2  ; Name Length Field
- 788:     -	320E  1032    	    .WORD  $ + 2             ; Code Field
- 789:				    ;----------
- 790: 2423+7	3210  1E0B    	    LD    E,1011b            ; Cyan color
- 791: 2430+10	3212  C3D731  		JP    stackByte
- 792:				
- 793:				;-------------------------------
- 794:				; RED ( -- c )
- 795:				;-------------------------------
- 796:     -	3215          	redName:
- 797:     -	3215  5245C4  	    .DC    "RED"      ; Name Fieldh (DC sets bit 7 of last char)
- 798:     -	3218  0D32    	    .WORD  cyanLink   ; Link Field: previous defined word in vocabulary
- 799:     -	321A          	redLink:
- 800:     -	321A  03      	    .BYTE  $ - redName - 2  ; Name Length Field
- 801:     -	321B  1D32    	    .WORD  $ + 2            ; Code Field
- 802:				    ;----------
- 803: 2440+7	321D  1E0C    	    LD    E,1100b           ; Red color
- 804: 2447+10	321F  C3D731  		JP    stackByte
- 805:				
- 806:				;-------------------------------
- 807:				; PURPLE ( -- c )
- 808:				;-------------------------------
- 809:     -	3222          	purpleName:
- 810:     -	3222  50555250	    .DC    "PURPLE"  ; Name Fieldh (DC sets bit 7 of last char)
+ 752:     -	31F2  E531    	    .WORD  blueLink   ; Link Field: previous defined word in vocabulary
+ 753:     -	31F4          	greenLink:
+ 754:     -	31F4  05      	    .BYTE  $ - greenName - 2  ; Name Length Field
+ 755:     -	31F5  F731    	    .WORD  $ + 2              ; Code Field
+ 756:				    ;----------
+ 757: 2360+7	31F7  1E0A    	    LD    E,1010b             ; Green color
+ 758: 2367+10	31F9  C3CC31  		JP    stackByteAndFinish
+ 759:				
+ 760:				;-------------------------------
+ 761:				; CYAN ( -- c )
+ 762:				;-------------------------------
+ 763:     -	31FC          	cyanName:
+ 764:     -	31FC  435941CE	    .DC    "CYAN"     ; Name Fieldh (DC sets bit 7 of last char)
+ 765:     -	3200  F431    	    .WORD  greenLink  ; Link Field: previous defined word in vocabulary
+ 766:     -	3202          	cyanLink:
+ 767:     -	3202  04      	    .BYTE  $ - cyanName - 2  ; Name Length Field
+ 768:     -	3203  0532    	    .WORD  $ + 2             ; Code Field
+ 769:				    ;----------
+ 770: 2377+7	3205  1E0B    	    LD    E,1011b            ; Cyan color
+ 771: 2384+10	3207  C3CC31  		JP    stackByteAndFinish
+ 772:				
+ 773:				;-------------------------------
+ 774:				; RED ( -- c )
+ 775:				;-------------------------------
+ 776:     -	320A          	redName:
+ 777:     -	320A  5245C4  	    .DC    "RED"      ; Name Fieldh (DC sets bit 7 of last char)
+ 778:     -	320D  0232    	    .WORD  cyanLink   ; Link Field: previous defined word in vocabulary
+ 779:     -	320F          	redLink:
+ 780:     -	320F  03      	    .BYTE  $ - redName - 2  ; Name Length Field
+ 781:     -	3210  1232    	    .WORD  $ + 2            ; Code Field
+ 782:				    ;----------
+ 783: 2394+7	3212  1E0C    	    LD    E,1100b           ; Red color
+ 784: 2401+10	3214  C3CC31  		JP    stackByteAndFinish
+ 785:				
+ 786:				;-------------------------------
+ 787:				; PURPLE ( -- c )
+ 788:				;-------------------------------
+ 789:     -	3217          	purpleName:
+ 790:     -	3217  50555250	    .DC    "PURPLE"  ; Name Fieldh (DC sets bit 7 of last char)
 	              4CC5
- 811:     -	3228  1A32    	    .WORD  redLink   ; Link Field: previous defined word in vocabulary
- 812:     -	322A          	purpleLink:
- 813:     -	322A  06      	    .BYTE  $ - purpleName - 2  ; Name Length Field
- 814:     -	322B  2D32    	    .WORD  $ + 2               ; Code Field
- 815:				    ;----------
- 816: 2457+7	322D  1E0D    	    LD    E,1101b              ; Purple color
- 817: 2464+10	322F  C3D731  		JP    stackByte
- 818:				
- 819:				;-------------------------------
- 820:				; YELLOW ( -- c )
- 821:				;-------------------------------
- 822:     -	3232          	yellowName:
- 823:     -	3232  59454C4C	    .DC    "YELLOW"    ; Name Fieldh (DC sets bit 7 of last char)
+ 791:     -	321D  0F32    	    .WORD  redLink   ; Link Field: previous defined word in vocabulary
+ 792:     -	321F          	purpleLink:
+ 793:     -	321F  06      	    .BYTE  $ - purpleName - 2  ; Name Length Field
+ 794:     -	3220  2232    	    .WORD  $ + 2               ; Code Field
+ 795:				    ;----------
+ 796: 2411+7	3222  1E0D    	    LD    E,1101b              ; Purple color
+ 797: 2418+10	3224  C3CC31  		JP    stackByteAndFinish
+ 798:				
+ 799:				;-------------------------------
+ 800:				; YELLOW ( -- c )
+ 801:				;-------------------------------
+ 802:     -	3227          	yellowName:
+ 803:     -	3227  59454C4C	    .DC    "YELLOW"    ; Name Fieldh (DC sets bit 7 of last char)
 	              4FD7
- 824:     -	3238  2A32    	    .WORD  purpleLink  ; Link Field: previous defined word in vocabulary
- 825:     -	323A          	yellowLink:
- 826:     -	323A  06      	    .BYTE  $ - yellowName - 2  ; Name Length Field
- 827:     -	323B  3D32    	    .WORD  $ + 2               ; Code Field
- 828:				    ;----------
- 829: 2474+7	323D  1E0E    	    LD    E,1110b              ; Yellow color
- 830: 2481+10	323F  C3D731  		JP    stackByte
- 831:				
- 832:				;-------------------------------
- 833:				; WHITE ( -- c )
- 834:				;-------------------------------
- 835:     -	3242          	whiteName:
- 836:     -	3242  57484954	    .DC    "WHITE"     ; Name Fieldh (DC sets bit 7 of last char)
+ 804:     -	322D  1F32    	    .WORD  purpleLink  ; Link Field: previous defined word in vocabulary
+ 805:     -	322F          	yellowLink:
+ 806:     -	322F  06      	    .BYTE  $ - yellowName - 2  ; Name Length Field
+ 807:     -	3230  3232    	    .WORD  $ + 2               ; Code Field
+ 808:				    ;----------
+ 809: 2428+7	3232  1E0E    	    LD    E,1110b              ; Yellow color
+ 810: 2435+10	3234  C3CC31  		JP    stackByteAndFinish
+ 811:				
+ 812:				;-------------------------------
+ 813:				; WHITE ( -- c )
+ 814:				;-------------------------------
+ 815:     -	3237          	whiteName:
+ 816:     -	3237  57484954	    .DC    "WHITE"     ; Name Fieldh (DC sets bit 7 of last char)
 	              C5
- 837:     -	3247  3A32    	    .WORD  yellowLink  ; Link Field: previous defined word in vocabulary
- 838:     -	3249          	whiteLink:
- 839:     -	3249  05      	    .BYTE  $ - whiteName - 2  ; Name Length Field
- 840:     -	324A  4C32    	    .WORD  $ + 2              ; Code Field
- 841:				    ;----------
- 842: 2491+7	324C  1E0F    	    LD    E,1111b             ; White color
- 843: 2498+10	324E  C3D731  		JP    stackByte
- 844:				
- 845:				;-------------------------------
- 846:				; DARK ( c1 -- c2 )
- 847:				;-------------------------------
- 848:				; Change color code on stack to darker tone
- 849:     -	3251          	darkName:
- 850:     -	3251  444152CB	    .DC    "DARK"     ; Name Fieldh (DC sets bit 7 of last char)
- 851:     -	3255  4932    	    .WORD  whiteLink  ; Link Field: previous defined word in vocabulary
- 852:     -	3257          	darkLink:
- 853:     -	3257  04      	    .BYTE  $ - darkName - 2  ; Name Length Field
- 854:     -	3258  5A32    	    .WORD  $ + 2             ; Code Field
- 855:				    ;----------
- 856: 2508+11	C380  DF      	    FORTHpop                 ; Pop from FORTH data stack to DE
- 857: 2519+4	325B  7B      	    LD    A,E                ; Get lower byte
- 858: 2523+7	325C  E607    	    AND   0111b              ; Clear intensity bit3
- 859: 2530+4	325E  5F      	    LD    E,A                ; Put it back in Data Stack
- 860: 2534+10	325F  C3D731  	    JP    stackByte
- 861:				
- 862:				;------------------------------------------------------------------------------
- 863:				; XDICT Subroutines -----------------------------------------------------------
- 864:				;------------------------------------------------------------------------------
- 865:				; Serial Interface  (UART 16C450) routines
- 866:					
- 867:				;-------------------------------
- 868:				; UART Inititalization: 8 data bits, 1 stop bit, no parity
- 869:				;   Input: BC = Baud rate divisor
- 870:				; Affects: A
- 871:				; Baud rate divisor = 3,686,400 / (16 * baud rate)
- 872:				;    Baud: 300 | 1200 | 2400 | 3600 | 4800 | 9600 | 19200
- 873:				; Divisor: 768 |  192 |   96 |   64 |   48 |   24 |    12
- 874:     -	3262          	UartSet:                 
- 875: 2544+7	3262  3E80    	    LD    A,$80        ; Set DLAB flag
- 876: 2551+11	3264  D3E7    	    OUT   (UART_LCR),A
- 877: 2562+4	3266  79      	    LD    A,C          ; Set Baud Rate divisor (Less Significant Byte)
- 878: 2566+11	3267  D3E1    	    OUT   (UART_DLL),A
- 879: 2577+4	3269  78      	    LD    A,B          ; Set Baud Rate divisor (Most Significant Byte)
- 880: 2581+11	326A  D3E3    	    OUT   (UART_DLM),A 
- 881: 2592+7	326C  3E03    	    LD    A,$03        ; 8-bit data, 1 stop-bit, no parity, reset DLAB flag
- 882: 2599+11	326E  D3E7    	    OUT   (UART_LCR),A
- 883: 2610+10	3270  C9      	    RET
- 884:				
- 885:				;-------------------------------
- 886:				; Check if UART exist by writing/reading scratch register
- 887:				; Output: A=0 and Z flag set only if UART exists
- 888:				; Affects: A 
- 889:     -	3271          	UartCheck:
- 890: 2620+7	3271  3EAA    		LD    A,$AA             ; Test pattern 1
- 891: 2627+11	3273  D3EF    		OUT   (UART_SCR),A      ; Write test bits to Scratch register
- 892: 2638+11	3275  DBEF    		IN    A,(UART_SCR)      ; Read it back
- 893: 2649+7	3277  EEAA    		XOR   $AA               ; If success, A=0 and Z flag is set
- 894: 2656+7+5	3279  2008    		JR    NZ,UartCheckExit  ; Fail, get out
- 895: 2663+7	327B  3E55    		LD    A,$55             ; Test pattern 2
- 896: 2670+11	327D  D3EF    		OUT   (UART_SCR),A      ; Write test bits to Scratch register
- 897: 2681+11	327F  DBEF    		IN    A,(UART_SCR)      ; Read it back
- 898: 2692+7	3281  EE55    		XOR   $55               ; If success, A=0 and Z flag is set	
- 899:     -	3283          	UartCheckExit:
- 900: 2699+10	3283  C9      		RET
- 901:					
- 902:				;-------------------------------
- 903:				; Receive bytes from serial line
- 904:				; Input: HL = destination memory block
- 905:				;        BC = bytes to receive
- 906:     -	3284          	UartRx:
- 907: 2709+17	3284  CD7132  		CALL  UartCheck      ; Check if UART exist
- 908: 2726+7+5	3287  201F    		JR    NZ,UartExit    ; UART does not exist, abort
- 909:     -	3289          	UartRxWait:
- 910: 2733+17	3289  CD3603  	    CALL  scanKbrd       ; Wait release all keys
- 911: 2750+4	328C  A7      	    AND   A
- 912: 2754+7+5	328D  20FA    		JR    NZ,UartRxWait
- 913:				
- 914: 2761+4	328F  F3      		DI                   ; Avoid interrupts
- 915:     -	3290          	UartRxLoop:
- 916: 2765+10	3290  01FE7F  	    LD   BC,$7FFE        ; Check for Break Key (space scan group)
- 917: 2775+12	3293  ED78    	    IN   A,(C)           ; Space key is in $7FFE key group, bit-0
- 918: 2787+8	3295  CB47    		BIT  0,A             ; Check for 'space' keypress
- 919: 2795+7+5	3297  280F    		JR   Z,UartExit      ; 'space' key pressed , Abort
- 920:				
- 921: 2802+11	3299  DBEB    	    IN    A,(UART_LSR)   ; Read Line Status Register
- 922: 2813+8	329B  CB47    	    BIT   0,A            ; check UART ready to receive flag
- 923: 2821+7+5	329D  28F1    	    JR    Z,UartRxLoop   ; wait if not ready
- 924:				
- 925: 2828+11	329F  DBE1    	    IN    A,(UART_DATA)  ; Get received byte
- 926: 2839+7	32A1  77      		LD    (HL),A         ; Store it in memory
- 927: 2846+6	32A2  23      		INC   HL             ; Point to next receive memory position
- 928: 2852+6	32A3  1B      		DEC   DE             ; Countdown received bytes
- 929: 2858+4	32A4  7A      		LD    A,D            ; Last byte ?
- 930: 2862+4	32A5  B3      		OR    E
- 931: 2866+7+5	32A6  20E8    		JR    NZ,UartRxLoop  ; No, Receive next byte
- 932:				
- 933:     -	32A8          	UartExit:
- 934: 2873+17	32A8  CD3603  	    CALL  scanKbrd       ; Wait for key release
- 935: 2890+4	32AB  A7      	    AND   A
- 936: 2894+7+5	32AC  20FA    		JR    NZ,UartExit
- 937:				
- 938: 2901+4	32AE  FB      	    EI                   ; Re-enable Interrupts
- 939: 2905+10	32AF  C9      	    RET
- 940:				
- 941:				;-------------------------------
- 942:				; Transmit bytes over serial line
- 943:				; Input: HL = source memory block
- 944:				;        DE = bytes to transmit
- 945:     -	32B0          	UartTx:
- 946: 2915+17	32B0  CD7132  		CALL  UartCheck      ; Check if UART exist
- 947: 2932+7+5	32B3  20F3    		JR    NZ,UartExit    ; UART does not exist, abort
- 948:     -	32B5          	UartTxWait:
- 949: 2939+17	32B5  CD3603  	    CALL  scanKbrd       ; Wait release all keys
- 950: 2956+4	32B8  A7      	    AND   A
- 951: 2960+7+5	32B9  20FA    		JR    NZ,UartTxWait	
- 952:					
- 953: 2967+4	32BB  F3      		DI                   ; Avoid Interrupts
- 954:     -	32BC          	UartTxLoop:
- 955: 2971+10	32BC  01FE7F  	    LD   BC,$7FFE        ; Check for Break Key (space scan group)
- 956: 2981+12	32BF  ED78    	    IN   A,(C)           ; Space key is in $7FFE key group, bit-0
- 957: 2993+8	32C1  CB47    		BIT  0,A             ; Check for 'space' keypress
- 958: 3001+7+5	32C3  28E3    		JR   Z,UartExit      ; 'space' key pressed , Abort
- 959:				
- 960: 3008+11	32C5  DBEB    	    IN   A,(UART_LSR)    ; Read Line Status Register
- 961: 3019+8	32C7  CB6F    		BIT  5,A             ; check UART ready to send flag
- 962: 3027+7+5	32C9  28F1    		JR   Z,UartTxLoop    ; wait if not ready
- 963:				
- 964: 3034+7	32CB  7E      	    LD    A,(HL)         ; Get byte to transmit	
- 965: 3041+11	32CC  D3E1    	    OUT   (UART_DATA),A  ; Send byte
- 966: 3052+6	32CE  23      	    INC   HL             ; Point to next data byte
- 967: 3058+6	32CF  1B      		DEC   DE             ; Countdown bytes transmitted
- 968: 3064+4	32D0  7A      		LD    A,D            ; Last byte ?
- 969: 3068+4	32D1  B3      		OR    E
- 970: 3072+7+5	32D2  20E8    		JR    NZ,UartTxLoop  ; No, Transmit next byte
- 971:					
- 972: 3079+10	32D4  C3A832  		JP    UartExit       ; Exit
- 973:				
- 974:				;##############################################################################
- 975:     -	C3FD          	    .DEPHASE
- 976:				;##############################################################################
- 977:     -	C3FD          	dictExpEnd:
- 978:				
- 979:				;==============================================================================
- 980:				; Alternate Character Set =====================================================
- 981:				;==============================================================================
- 982:     -	C3FD          	charSet:
- 983:     -	C3FD  00000000	    .BYTE   000h, 000h, 000h, 000h, 000h, 000h, 000h, 000h  ; blank
+ 817:     -	323C  2F32    	    .WORD  yellowLink  ; Link Field: previous defined word in vocabulary
+ 818:     -	323E          	whiteLink:
+ 819:     -	323E  05      	    .BYTE  $ - whiteName - 2  ; Name Length Field
+ 820:     -	323F  4132    	    .WORD  $ + 2              ; Code Field
+ 821:				    ;----------
+ 822: 2445+7	3241  1E0F    	    LD    E,1111b             ; White color
+ 823: 2452+10	3243  C3CC31  		JP    stackByteAndFinish
+ 824:				
+ 825:				;-------------------------------
+ 826:				; DARK ( c1 -- c2 )
+ 827:				;-------------------------------
+ 828:				; Change color code on stack to darker tone
+ 829:     -	3246          	darkName:
+ 830:     -	3246  444152CB	    .DC    "DARK"     ; Name Fieldh (DC sets bit 7 of last char)
+ 831:     -	324A  3E32    	    .WORD  whiteLink  ; Link Field: previous defined word in vocabulary
+ 832:     -	324C          	darkLink:
+ 833:     -	324C  04      	    .BYTE  $ - darkName - 2  ; Name Length Field
+ 834:     -	324D  4F32    	    .WORD  $ + 2             ; Code Field
+ 835:				    ;----------
+ 836: 2462+11	C375  DF      	    FORTHpop                 ; Pop from FORTH data stack to DE
+ 837: 2473+4	3250  7B      	    LD    A,E                ; Get lower byte
+ 838: 2477+7	3251  E607    	    AND   0111b              ; Clear intensity bit3
+ 839: 2484+4	3253  5F      	    LD    E,A                ; Put it back in Data Stack
+ 840: 2488+10	3254  C3CC31  	    JP    stackByteAndFinish
+ 841:				
+ 842:				;------------------------------------------------------------------------------
+ 843:				; XDICT Subroutines -----------------------------------------------------------
+ 844:				;------------------------------------------------------------------------------
+ 845:				
+ 846:				;-------------------------------
+ 847:				; Fill memory block
+ 848:				; Input: HL = Starting address to fill
+ 849:				;        BC = Number of bytes to fill
+ 850:				;        E  = Filling byte value
+ 851:     -	3257          	fill:
+ 852: 2498+4	3257  78      	    LD    A,B         ; Check if block size is zero
+ 853: 2502+4	3258  B1      	    OR    C
+ 854: 2506+5+6	3259  C8      		RET   Z           ; If block size = 0 , Exit loop
+ 855:					;----
+ 856: 2511+7	325A  73      	    LD    (HL),E      ; write one byte
+ 857: 2518+6	325B  23      	    INC   HL          ; move to next address
+ 858: 2524+6	325C  0B      		DEC   BC          ; Number of bytes Countdown
+ 859: 2530+12	325D  18F8    		JR    fill        ; Fill loop
+ 860:				
+ 861:				;-------------------------------
+ 862:				; Block move code based on 'Z80 Assembly Language Routines' from 'Lance A. Leventhal'
+ 863:				; Input: HL = Source address
+ 864:				;        DE = Destination address
+ 865:				;        BC = Number of bytes to move
+ 866:				; Affects: AF, BC, DE, HL
+ 867:     -	325F          	cmove:
+ 868: 2542+4	325F  78      	    LD    A,B    ; check if zero bytes to move
+ 869: 2546+4	3260  B1      		OR    C
+ 870: 2550+5+6	3261  C8      		RET   Z      ; if zero bytes to move , Abort
+ 871:					; check for overlaping regions
+ 872: 2555+4	3262  EB      	    EX    DE,HL   ; calculate destination - source
+ 873: 2559+11	3263  E5      		PUSH  HL      ; save destination address
+ 874: 2570+4	3264  A7      		AND   A       ; prepare for subtraction (clear carry)
+ 875: 2574+15	3265  ED52    		SBC   HL,DE   ; HL = destination - source
+ 876: 2589+4	3267  A7      		AND   A       ; prepare for subtraction (clear carry)
+ 877: 2593+15	3268  ED42    		SBC   HL,BC   ; subtract size
+ 878: 2608+10	326A  E1      		POP   HL      ; restore destination address
+ 879: 2618+4	326B  EB      		EX    DE,HL   ; HL = source , DE = destinattion
+ 880: 2622+7+5	326C  3009    		JR    NC,cmoveUp ; no overlaping , move up
+ 881:					; Destination area is above and overlaps with source
+ 882:					; move from highest address avoiding data destruction
+ 883: 2629+11	326E  09      		ADD   HL,BC     ; sourceHigh = sourceLow + length - 1
+ 884: 2640+6	326F  2B      		DEC   HL
+ 885: 2646+4	3270  EB      		EX    DE,HL
+ 886: 2650+11	3271  09      		ADD   HL,BC     ; destHigh = destLo + length - 1
+ 887: 2661+6	3272  2B      		DEC   HL
+ 888: 2667+4	3273  EB      		EX    DE,HL     ; HL = source , DE = destination
+ 889: 2671+16+5	3274  EDB8    		LDDR            ; Block move high to low
+ 890: 2687+10	3276  C9      		RET
+ 891:     -	3277          	cmoveUp:
+ 892: 2697+16+5	3277  EDB0    	    LDIR            ; Block move low to high
+ 893: 2713+10	3279  C9      		RET
+ 894:				
+ 895:				;------------------------------- (UART 16C450)
+ 896:				; UART Inititalization: 8 data bits, 1 stop bit, no parity
+ 897:				;   Input: BC = Baud rate divisor
+ 898:				; Affects: A
+ 899:				; Baud rate divisor = 3,686,400 / (16 * baud rate)
+ 900:				;    Baud: 300 | 1200 | 2400 | 3600 | 4800 | 9600 | 19200
+ 901:				; Divisor: 768 |  192 |   96 |   64 |   48 |   24 |    12
+ 902:     -	327A          	UartSet:                 
+ 903: 2723+7	327A  3E80    	    LD    A,$80        ; Set DLAB flag
+ 904: 2730+11	327C  D3E7    	    OUT   (UART_LCR),A
+ 905: 2741+4	327E  79      	    LD    A,C          ; Set Baud Rate divisor (Less Significant Byte)
+ 906: 2745+11	327F  D3E1    	    OUT   (UART_DLL),A
+ 907: 2756+4	3281  78      	    LD    A,B          ; Set Baud Rate divisor (Most Significant Byte)
+ 908: 2760+11	3282  D3E3    	    OUT   (UART_DLM),A 
+ 909: 2771+7	3284  3E03    	    LD    A,$03        ; 8-bit data, 1 stop-bit, no parity, reset DLAB flag
+ 910: 2778+11	3286  D3E7    	    OUT   (UART_LCR),A
+ 911: 2789+10	3288  C9      	    RET
+ 912:				
+ 913:				;------------------------------- (UART 16C450)
+ 914:				; Check if UART exist by writing/reading scratch register
+ 915:				; Output: A=0 and Z flag set only if UART exists
+ 916:				; Affects: A 
+ 917:     -	3289          	UartCheck:
+ 918: 2799+7	3289  3EAA    		LD    A,$AA             ; Test pattern 1
+ 919: 2806+11	328B  D3EF    		OUT   (UART_SCR),A      ; Write test bits to Scratch register
+ 920: 2817+11	328D  DBEF    		IN    A,(UART_SCR)      ; Read it back
+ 921: 2828+7	328F  EEAA    		XOR   $AA               ; If success, A=0 and Z flag is set
+ 922: 2835+7+5	3291  2008    		JR    NZ,UartCheckExit  ; Fail, get out
+ 923:					;----
+ 924: 2842+7	3293  3E55    		LD    A,$55             ; Test pattern 2
+ 925: 2849+11	3295  D3EF    		OUT   (UART_SCR),A      ; Write test bits to Scratch register
+ 926: 2860+11	3297  DBEF    		IN    A,(UART_SCR)      ; Read it back
+ 927: 2871+7	3299  EE55    		XOR   $55               ; If success, A=0 and Z flag is set	
+ 928:     -	329B          	UartCheckExit:
+ 929: 2878+10	329B  C9      		RET
+ 930:					
+ 931:				;------------------------------- (UART 16C450)
+ 932:				; Receive bytes from serial line
+ 933:				; Input: HL = destination memory block
+ 934:				;        DE = bytes to receive
+ 935:     -	329C          	UartRx:
+ 936: 2888+17	329C  CD8932  		CALL  UartCheck      ; Check if UART exist
+ 937: 2905+5+6	329F  C0      		RET   NZ             ; UART does not exist, abort
+ 938:     -	32A0          	UartRxWait:
+ 939: 2910+10	32A0  01FE7F  	    LD   BC,$7FFE        ; Check for Break Key (space scan group)
+ 940: 2920+12	32A3  ED78    	    IN   A,(C)           ; Space key is in $7FFE key group, bit-0
+ 941: 2932+8	32A5  CB47    		BIT  0,A             ; Check for 'space' keypress
+ 942: 2940+7+5	32A7  28F7    		JR   Z,UartRxWait    ; 'space' key pressed , wait release
+ 943:					;----
+ 944: 2947+4	32A9  F3      		DI                   ; Avoid interrupts
+ 945:     -	32AA          	UartRxLoop:
+ 946:				    ; Check for Break Key (relies on LD BC,$7FFE above)
+ 947: 2951+12	32AA  ED78    	    IN   A,(C)           ; Space key is in $7FFE key group, bit-0
+ 948: 2963+8	32AC  CB47    		BIT  0,A             ; Check for 'space' keypress
+ 949: 2971+7+5	32AE  280F    		JR   Z,UartExit      ; 'space' key pressed , Abort
+ 950:				    ; Check if new byte arrived
+ 951: 2978+11	32B0  DBEB    	    IN    A,(UART_LSR)   ; Read Line Status Register
+ 952: 2989+8	32B2  CB47    	    BIT   0,A            ; check UART ready to receive flag
+ 953: 2997+7+5	32B4  28F4    	    JR    Z,UartRxLoop   ; wait if not ready
+ 954:				    ; Get received byte
+ 955: 3004+11	32B6  DBE1    	    IN    A,(UART_DATA)  ; Get received byte
+ 956: 3015+7	32B8  77      		LD    (HL),A         ; Store it in memory
+ 957: 3022+6	32B9  23      		INC   HL             ; Point to next receive memory position
+ 958: 3028+6	32BA  1B      		DEC   DE             ; Countdown received bytes
+ 959: 3034+4	32BB  7A      		LD    A,D            ; Last byte ?
+ 960: 3038+4	32BC  B3      		OR    E
+ 961: 3042+7+5	32BD  20EB    		JR    NZ,UartRxLoop  ; No, Receive next byte
+ 962:     -	32BF          	UartExit:
+ 963: 3049+17	32BF  CD3603  	    CALL  scanKbrd       ; Wait for key release
+ 964: 3066+4	32C2  A7      	    AND   A
+ 965: 3070+7+5	32C3  20FA    		JR    NZ,UartExit
+ 966:				
+ 967: 3077+4	32C5  FB      	    EI                   ; Re-enable Interrupts
+ 968: 3081+10	32C6  C9      	    RET
+ 969:				
+ 970:				;------------------------------- (UART 16C450)
+ 971:				; Transmit bytes over serial line
+ 972:				; Input: HL = source memory block
+ 973:				;        DE = bytes to transmit
+ 974:     -	32C7          	UartTx:
+ 975: 3091+17	32C7  CD8932  		CALL  UartCheck      ; Check if UART exist
+ 976: 3108+5+6	32CA  C0      		RET   NZ             ; UART does not exist, abort
+ 977:     -	32CB          	UartTxWait:
+ 978: 3113+10	32CB  01FE7F  	    LD   BC,$7FFE        ; Check for Break Key
+ 979: 3123+12	32CE  ED78    	    IN   A,(C)           ; Space key is in $7FFE key group, bit-0
+ 980: 3135+8	32D0  CB47    		BIT  0,A             ; Check for 'space' keypress
+ 981: 3143+7+5	32D2  28F7    		JR   Z,UartTxWait    ; 'space' key pressed , wait release	
+ 982:				    ;----
+ 983: 3150+4	32D4  F3      		DI                   ; Avoid Interrupts
+ 984:     -	32D5          	UartTxLoop:
+ 985:				    ; Check for Break Key (relies on LD BC,$7FFE above)
+ 986: 3154+12	32D5  ED78    	    IN   A,(C)           ; Space key is in $7FFE key group, bit-0
+ 987: 3166+8	32D7  CB47    		BIT  0,A             ; Check for 'space' keypress
+ 988: 3174+7+5	32D9  28E4    		JR   Z,UartExit      ; 'space' key pressed , Abort
+ 989:				    ; Check if last byte was transmitted
+ 990: 3181+11	32DB  DBEB    	    IN   A,(UART_LSR)    ; Read Line Status Register
+ 991: 3192+8	32DD  CB6F    		BIT  5,A             ; check UART ready to send flag
+ 992: 3200+7+5	32DF  28F4    		JR   Z,UartTxLoop    ; wait if not ready
+ 993:				    ; Send a new byte
+ 994: 3207+7	32E1  7E      	    LD    A,(HL)         ; Get byte to transmit	
+ 995: 3214+11	32E2  D3E1    	    OUT   (UART_DATA),A  ; Send byte
+ 996: 3225+6	32E4  23      	    INC   HL             ; Point to next data byte
+ 997: 3231+6	32E5  1B      		DEC   DE             ; Countdown bytes transmitted
+ 998: 3237+4	32E6  7A      		LD    A,D            ; Last byte ?
+ 999: 3241+4	32E7  B3      		OR    E
+1000: 3245+7+5	32E8  20EB    		JR    NZ,UartTxLoop  ; No, Transmit next byte
+1001:					;----
+1002: 3252+10	32EA  C3BF32  		JP    UartExit       ; Exit
+1003:				
+1004:				;##############################################################################
+1005:     -	C413          	    .DEPHASE
+1006:				;##############################################################################
+1007:     -	C413          	dictExpEnd:
+1008:				
+1009:				;==============================================================================
+1010:				; Alternate Character Set =====================================================
+1011:				;==============================================================================
+1012:     -	C413          	charSet:
+1013:     -	C413  00000000	    .BYTE   000h, 000h, 000h, 000h, 000h, 000h, 000h, 000h  ; blank
 	              00000000
- 984:     -	C405  0F0F0F0F	    .BYTE   00Fh, 00Fh, 00Fh, 00Fh, 000h, 000h, 000h, 000h  ; graphic 1
+1014:     -	C41B  0F0F0F0F	    .BYTE   00Fh, 00Fh, 00Fh, 00Fh, 000h, 000h, 000h, 000h  ; graphic 1
 	              00000000
- 985:     -	C40D  F0F0F0F0	    .BYTE   0F0h, 0F0h, 0F0h, 0F0h, 000h, 000h, 000h, 000h  ; graphic 2
+1015:     -	C423  F0F0F0F0	    .BYTE   0F0h, 0F0h, 0F0h, 0F0h, 000h, 000h, 000h, 000h  ; graphic 2
 	              00000000
- 986:     -	C415  FFFFFFFF	    .BYTE   0FFh, 0FFh, 0FFh, 0FFh, 000h, 000h, 000h, 000h  ; graphic 3
+1016:     -	C42B  FFFFFFFF	    .BYTE   0FFh, 0FFh, 0FFh, 0FFh, 000h, 000h, 000h, 000h  ; graphic 3
 	              00000000
- 987:     -	C41D  00000000	    .BYTE   000h, 000h, 000h, 000h, 00Fh, 00Fh, 00Fh, 00Fh  ; graphic 4
+1017:     -	C433  00000000	    .BYTE   000h, 000h, 000h, 000h, 00Fh, 00Fh, 00Fh, 00Fh  ; graphic 4
 	              0F0F0F0F
- 988:     -	C425  0F0F0F0F	    .BYTE   00Fh, 00Fh, 00Fh, 00Fh, 00Fh, 00Fh, 00Fh, 00Fh  ; graphic 5
+1018:     -	C43B  0F0F0F0F	    .BYTE   00Fh, 00Fh, 00Fh, 00Fh, 00Fh, 00Fh, 00Fh, 00Fh  ; graphic 5
 	              0F0F0F0F
- 989:     -	C42D  F0F0F0F0	    .BYTE   0F0h, 0F0h, 0F0h, 0F0h, 00Fh, 00Fh, 00Fh, 00Fh  ; graphic 6
+1019:     -	C443  F0F0F0F0	    .BYTE   0F0h, 0F0h, 0F0h, 0F0h, 00Fh, 00Fh, 00Fh, 00Fh  ; graphic 6
 	              0F0F0F0F
- 990:     -	C435  FFFFFFFF	    .BYTE   0FFh, 0FFh, 0FFh, 0FFh, 00Fh, 00Fh, 00Fh, 00Fh  ; graphic 7
+1020:     -	C44B  FFFFFFFF	    .BYTE   0FFh, 0FFh, 0FFh, 0FFh, 00Fh, 00Fh, 00Fh, 00Fh  ; graphic 7
 	              0F0F0F0F
- 991:     -	C43D  00000000	    .BYTE   000h, 000h, 000h, 000h, 000h, 000h, 000h, 000h  ; blank
+1021:     -	C453  00000000	    .BYTE   000h, 000h, 000h, 000h, 000h, 000h, 000h, 000h  ; blank
 	              00000000
- 992:     -	C445  0F0F0F0F	    .BYTE   00Fh, 00Fh, 00Fh, 00Fh, 000h, 000h, 000h, 000h  ; graphic 1
+1022:     -	C45B  0F0F0F0F	    .BYTE   00Fh, 00Fh, 00Fh, 00Fh, 000h, 000h, 000h, 000h  ; graphic 1
 	              00000000
- 993:     -	C44D  F0F0F0F0	    .BYTE   0F0h, 0F0h, 0F0h, 0F0h, 000h, 000h, 000h, 000h  ; graphic 2
+1023:     -	C463  F0F0F0F0	    .BYTE   0F0h, 0F0h, 0F0h, 0F0h, 000h, 000h, 000h, 000h  ; graphic 2
 	              00000000
- 994:     -	C455  FFFFFFFF	    .BYTE   0FFh, 0FFh, 0FFh, 0FFh, 000h, 000h, 000h, 000h  ; graphic 3
+1024:     -	C46B  FFFFFFFF	    .BYTE   0FFh, 0FFh, 0FFh, 0FFh, 000h, 000h, 000h, 000h  ; graphic 3
 	              00000000
- 995:     -	C45D  00000000	    .BYTE   000h, 000h, 000h, 000h, 00Fh, 00Fh, 00Fh, 00Fh  ; graphic 4
+1025:     -	C473  00000000	    .BYTE   000h, 000h, 000h, 000h, 00Fh, 00Fh, 00Fh, 00Fh  ; graphic 4
 	              0F0F0F0F
- 996:     -	C465  0F0F0F0F	    .BYTE   00Fh, 00Fh, 00Fh, 00Fh, 00Fh, 00Fh, 00Fh, 00Fh  ; graphic 5
+1026:     -	C47B  0F0F0F0F	    .BYTE   00Fh, 00Fh, 00Fh, 00Fh, 00Fh, 00Fh, 00Fh, 00Fh  ; graphic 5
 	              0F0F0F0F
- 997:     -	C46D  F0F0F0F0	    .BYTE   0F0h, 0F0h, 0F0h, 0F0h, 00Fh, 00Fh, 00Fh, 00Fh  ; graphic 6
+1027:     -	C483  F0F0F0F0	    .BYTE   0F0h, 0F0h, 0F0h, 0F0h, 00Fh, 00Fh, 00Fh, 00Fh  ; graphic 6
 	              0F0F0F0F
- 998:     -	C475  FFFFFFFF	    .BYTE   0FFh, 0FFh, 0FFh, 0FFh, 00Fh, 00Fh, 00Fh, 00Fh  ; graphic 7
+1028:     -	C48B  FFFFFFFF	    .BYTE   0FFh, 0FFh, 0FFh, 0FFh, 00Fh, 00Fh, 00Fh, 00Fh  ; graphic 7
 	              0F0F0F0F
- 999:				    
-1000:     -	C47D  00000000	    .BYTE   000h, 000h, 000h, 000h, 000h, 000h, 000h, 000h  ; blank
+1029:				    
+1030:     -	C493  00000000	    .BYTE   000h, 000h, 000h, 000h, 000h, 000h, 000h, 000h  ; blank
 	              00000000
-1001:     -	C485  0F0F0F0F	    .BYTE   00Fh, 00Fh, 00Fh, 00Fh, 000h, 000h, 000h, 000h  ; graphic 1
+1031:     -	C49B  0F0F0F0F	    .BYTE   00Fh, 00Fh, 00Fh, 00Fh, 000h, 000h, 000h, 000h  ; graphic 1
 	              00000000
-1002:     -	C48D  F0F0F0F0	    .BYTE   0F0h, 0F0h, 0F0h, 0F0h, 000h, 000h, 000h, 000h  ; graphic 2
+1032:     -	C4A3  F0F0F0F0	    .BYTE   0F0h, 0F0h, 0F0h, 0F0h, 000h, 000h, 000h, 000h  ; graphic 2
 	              00000000
-1003:     -	C495  FFFFFFFF	    .BYTE   0FFh, 0FFh, 0FFh, 0FFh, 000h, 000h, 000h, 000h  ; graphic 3
+1033:     -	C4AB  FFFFFFFF	    .BYTE   0FFh, 0FFh, 0FFh, 0FFh, 000h, 000h, 000h, 000h  ; graphic 3
 	              00000000
-1004:     -	C49D  00000000	    .BYTE   000h, 000h, 000h, 000h, 00Fh, 00Fh, 00Fh, 00Fh  ; graphic 4
+1034:     -	C4B3  00000000	    .BYTE   000h, 000h, 000h, 000h, 00Fh, 00Fh, 00Fh, 00Fh  ; graphic 4
 	              0F0F0F0F
-1005:     -	C4A5  0F0F0F0F	    .BYTE   00Fh, 00Fh, 00Fh, 00Fh, 00Fh, 00Fh, 00Fh, 00Fh  ; graphic 5
+1035:     -	C4BB  0F0F0F0F	    .BYTE   00Fh, 00Fh, 00Fh, 00Fh, 00Fh, 00Fh, 00Fh, 00Fh  ; graphic 5
 	              0F0F0F0F
-1006:     -	C4AD  F0F0F0F0	    .BYTE   0F0h, 0F0h, 0F0h, 0F0h, 00Fh, 00Fh, 00Fh, 00Fh  ; graphic 6
+1036:     -	C4C3  F0F0F0F0	    .BYTE   0F0h, 0F0h, 0F0h, 0F0h, 00Fh, 00Fh, 00Fh, 00Fh  ; graphic 6
 	              0F0F0F0F
-1007:     -	C4B5  FFFFFFFF	    .BYTE   0FFh, 0FFh, 0FFh, 0FFh, 00Fh, 00Fh, 00Fh, 00Fh  ; graphic 7
+1037:     -	C4CB  FFFFFFFF	    .BYTE   0FFh, 0FFh, 0FFh, 0FFh, 00Fh, 00Fh, 00Fh, 00Fh  ; graphic 7
 	              0F0F0F0F
-1008:     -	C4BD  00000000	    .BYTE   000h, 000h, 000h, 000h, 000h, 000h, 000h, 000h  ; blank
+1038:     -	C4D3  00000000	    .BYTE   000h, 000h, 000h, 000h, 000h, 000h, 000h, 000h  ; blank
 	              00000000
-1009:     -	C4C5  0F0F0F0F	    .BYTE   00Fh, 00Fh, 00Fh, 00Fh, 000h, 000h, 000h, 000h  ; graphic 1
+1039:     -	C4DB  0F0F0F0F	    .BYTE   00Fh, 00Fh, 00Fh, 00Fh, 000h, 000h, 000h, 000h  ; graphic 1
 	              00000000
-1010:     -	C4CD  F0F0F0F0	    .BYTE   0F0h, 0F0h, 0F0h, 0F0h, 000h, 000h, 000h, 000h  ; graphic 2
+1040:     -	C4E3  F0F0F0F0	    .BYTE   0F0h, 0F0h, 0F0h, 0F0h, 000h, 000h, 000h, 000h  ; graphic 2
 	              00000000
-1011:     -	C4D5  FFFFFFFF	    .BYTE   0FFh, 0FFh, 0FFh, 0FFh, 000h, 000h, 000h, 000h  ; graphic 3
+1041:     -	C4EB  FFFFFFFF	    .BYTE   0FFh, 0FFh, 0FFh, 0FFh, 000h, 000h, 000h, 000h  ; graphic 3
 	              00000000
-1012:     -	C4DD  00000000	    .BYTE   000h, 000h, 000h, 000h, 00Fh, 00Fh, 00Fh, 00Fh  ; graphic 4
+1042:     -	C4F3  00000000	    .BYTE   000h, 000h, 000h, 000h, 00Fh, 00Fh, 00Fh, 00Fh  ; graphic 4
 	              0F0F0F0F
-1013:     -	C4E5  0F0F0F0F	    .BYTE   00Fh, 00Fh, 00Fh, 00Fh, 00Fh, 00Fh, 00Fh, 00Fh  ; graphic 5
+1043:     -	C4FB  0F0F0F0F	    .BYTE   00Fh, 00Fh, 00Fh, 00Fh, 00Fh, 00Fh, 00Fh, 00Fh  ; graphic 5
 	              0F0F0F0F
-1014:     -	C4ED  F0F0F0F0	    .BYTE   0F0h, 0F0h, 0F0h, 0F0h, 00Fh, 00Fh, 00Fh, 00Fh  ; graphic 6
+1044:     -	C503  F0F0F0F0	    .BYTE   0F0h, 0F0h, 0F0h, 0F0h, 00Fh, 00Fh, 00Fh, 00Fh  ; graphic 6
 	              0F0F0F0F
-1015:     -	C4F5  FFFFFFFF	    .BYTE   0FFh, 0FFh, 0FFh, 0FFh, 00Fh, 00Fh, 00Fh, 00Fh  ; graphic 7
+1045:     -	C50B  FFFFFFFF	    .BYTE   0FFh, 0FFh, 0FFh, 0FFh, 00Fh, 00Fh, 00Fh, 00Fh  ; graphic 7
 	              0F0F0F0F
-1016:				    
-1017:     -	C4FD  00000000	    .BYTE   000h, 000h, 000h, 000h, 000h, 000h, 000h, 000h  ; space
+1046:				    
+1047:     -	C513  00000000	    .BYTE   000h, 000h, 000h, 000h, 000h, 000h, 000h, 000h  ; space
 	              00000000
-1018:     -	C505  183C3C18	    .BYTE   018h, 03Ch, 03Ch, 018h, 018h, 000h, 018h, 000h  ; !
+1048:     -	C51B  183C3C18	    .BYTE   018h, 03Ch, 03Ch, 018h, 018h, 000h, 018h, 000h  ; !
 	              18001800
-1019:     -	C50D  36363600	    .BYTE   036h, 036h, 036h, 000h, 000h, 000h, 000h, 000h  ; "
+1049:     -	C523  36363600	    .BYTE   036h, 036h, 036h, 000h, 000h, 000h, 000h, 000h  ; "
 	              00000000
-1020:     -	C515  36367F36	    .BYTE   036h, 036h, 07Fh, 036h, 07Fh, 036h, 036h, 000h  ; #
+1050:     -	C52B  36367F36	    .BYTE   036h, 036h, 07Fh, 036h, 07Fh, 036h, 036h, 000h  ; #
 	              7F363600
-1021:     -	C51D  183E603C	    .BYTE   018h, 03Eh, 060h, 03Ch, 006h, 07Ch, 018h, 000h  ; $
+1051:     -	C533  183E603C	    .BYTE   018h, 03Eh, 060h, 03Ch, 006h, 07Ch, 018h, 000h  ; $
 	              067C1800
-1022:     -	C525  0063660C	    .BYTE   000h, 063h, 066h, 00Ch, 018h, 033h, 063h, 000h  ; %
+1052:     -	C53B  0063660C	    .BYTE   000h, 063h, 066h, 00Ch, 018h, 033h, 063h, 000h  ; %
 	              18336300
-1023:     -	C52D  1C361C3B	    .BYTE   01Ch, 036h, 01Ch, 03Bh, 06Eh, 066h, 03Bh, 000h  ; &
+1053:     -	C543  1C361C3B	    .BYTE   01Ch, 036h, 01Ch, 03Bh, 06Eh, 066h, 03Bh, 000h  ; &
 	              6E663B00
-1024:     -	C535  18183000	    .BYTE   018h, 018h, 030h, 000h, 000h, 000h, 000h, 000h  ; '
+1054:     -	C54B  18183000	    .BYTE   018h, 018h, 030h, 000h, 000h, 000h, 000h, 000h  ; '
 	              00000000
-1025:     -	C53D  0C183030	    .BYTE   00Ch, 018h, 030h, 030h, 030h, 018h, 00Ch, 000h  ; (
+1055:     -	C553  0C183030	    .BYTE   00Ch, 018h, 030h, 030h, 030h, 018h, 00Ch, 000h  ; (
 	              30180C00
-1026:     -	C545  30180C0C	    .BYTE   030h, 018h, 00Ch, 00Ch, 00Ch, 018h, 030h, 000h  ; )
+1056:     -	C55B  30180C0C	    .BYTE   030h, 018h, 00Ch, 00Ch, 00Ch, 018h, 030h, 000h  ; )
 	              0C183000
-1027:     -	C54D  00663CFF	    .BYTE   000h, 066h, 03Ch, 0FFh, 03Ch, 066h, 000h, 000h  ; *
+1057:     -	C563  00663CFF	    .BYTE   000h, 066h, 03Ch, 0FFh, 03Ch, 066h, 000h, 000h  ; *
 	              3C660000
-1028:     -	C555  0018187E	    .BYTE   000h, 018h, 018h, 07Eh, 018h, 018h, 000h, 000h  ; +
+1058:     -	C56B  0018187E	    .BYTE   000h, 018h, 018h, 07Eh, 018h, 018h, 000h, 000h  ; +
 	              18180000
-1029:     -	C55D  00000000	    .BYTE   000h, 000h, 000h, 000h, 000h, 018h, 018h, 030h  ; ,
+1059:     -	C573  00000000	    .BYTE   000h, 000h, 000h, 000h, 000h, 018h, 018h, 030h  ; ,
 	              00181830
-1030:     -	C565  0000007E	    .BYTE   000h, 000h, 000h, 07Eh, 000h, 000h, 000h, 000h  ; -
+1060:     -	C57B  0000007E	    .BYTE   000h, 000h, 000h, 07Eh, 000h, 000h, 000h, 000h  ; -
 	              00000000
-1031:     -	C56D  00000000	    .BYTE   000h, 000h, 000h, 000h, 000h, 018h, 018h, 000h  ; .
+1061:     -	C583  00000000	    .BYTE   000h, 000h, 000h, 000h, 000h, 018h, 018h, 000h  ; .
 	              00181800
-1032:     -	C575  060C1830	    .BYTE   006h, 00Ch, 018h, 030h, 060h, 0C0h, 080h, 000h  ; /
+1062:     -	C58B  060C1830	    .BYTE   006h, 00Ch, 018h, 030h, 060h, 0C0h, 080h, 000h  ; /
 	              60C08000
-1033:				    
-1034:     -	C57D  3E63676F	    .BYTE   03Eh, 063h, 067h, 06Fh, 07Bh, 073h, 03Eh, 000h  ; 0
+1063:				    
+1064:     -	C593  3E63676F	    .BYTE   03Eh, 063h, 067h, 06Fh, 07Bh, 073h, 03Eh, 000h  ; 0
 	              7B733E00
-1035:     -	C585  18381818	    .BYTE   018h, 038h, 018h, 018h, 018h, 018h, 07Eh, 000h  ; 1
+1065:     -	C59B  18381818	    .BYTE   018h, 038h, 018h, 018h, 018h, 018h, 07Eh, 000h  ; 1
 	              18187E00
-1036:     -	C58D  3C66061C	    .BYTE   03Ch, 066h, 006h, 01Ch, 030h, 066h, 07Eh, 000h  ; 2
+1066:     -	C5A3  3C66061C	    .BYTE   03Ch, 066h, 006h, 01Ch, 030h, 066h, 07Eh, 000h  ; 2
 	              30667E00
-1037:     -	C595  3C66061C	    .BYTE   03Ch, 066h, 006h, 01Ch, 006h, 066h, 03Ch, 000h  ; 3
+1067:     -	C5AB  3C66061C	    .BYTE   03Ch, 066h, 006h, 01Ch, 006h, 066h, 03Ch, 000h  ; 3
 	              06663C00
-1038:     -	C59D  0E1E3666	    .BYTE   00Eh, 01Eh, 036h, 066h, 07Fh, 006h, 00Fh, 000h  ; 4
+1068:     -	C5B3  0E1E3666	    .BYTE   00Eh, 01Eh, 036h, 066h, 07Fh, 006h, 00Fh, 000h  ; 4
 	              7F060F00
-1039:     -	C5A5  7E607C06	    .BYTE   07Eh, 060h, 07Ch, 006h, 006h, 066h, 03Ch, 000h  ; 5
+1069:     -	C5BB  7E607C06	    .BYTE   07Eh, 060h, 07Ch, 006h, 006h, 066h, 03Ch, 000h  ; 5
 	              06663C00
-1040:     -	C5AD  1C30607C	    .BYTE   01Ch, 030h, 060h, 07Ch, 066h, 066h, 03Ch, 000h  ; 6
+1070:     -	C5C3  1C30607C	    .BYTE   01Ch, 030h, 060h, 07Ch, 066h, 066h, 03Ch, 000h  ; 6
 	              66663C00
-1041:     -	C5B5  7E66060C	    .BYTE   07Eh, 066h, 006h, 00Ch, 018h, 018h, 018h, 000h  ; 7
+1071:     -	C5CB  7E66060C	    .BYTE   07Eh, 066h, 006h, 00Ch, 018h, 018h, 018h, 000h  ; 7
 	              18181800
-1042:     -	C5BD  3C66663C	    .BYTE   03Ch, 066h, 066h, 03Ch, 066h, 066h, 03Ch, 000h  ; 8
+1072:     -	C5D3  3C66663C	    .BYTE   03Ch, 066h, 066h, 03Ch, 066h, 066h, 03Ch, 000h  ; 8
 	              66663C00
-1043:     -	C5C5  3C66663E	    .BYTE   03Ch, 066h, 066h, 03Eh, 006h, 00Ch, 038h, 000h  ; 9
+1073:     -	C5DB  3C66663E	    .BYTE   03Ch, 066h, 066h, 03Eh, 006h, 00Ch, 038h, 000h  ; 9
 	              060C3800
-1044:     -	C5CD  00181800	    .BYTE   000h, 018h, 018h, 000h, 000h, 018h, 018h, 000h  ; :
+1074:     -	C5E3  00181800	    .BYTE   000h, 018h, 018h, 000h, 000h, 018h, 018h, 000h  ; :
 	              00181800
-1045:     -	C5D5  00181800	    .BYTE   000h, 018h, 018h, 000h, 000h, 018h, 018h, 030h  ; ;
+1075:     -	C5EB  00181800	    .BYTE   000h, 018h, 018h, 000h, 000h, 018h, 018h, 030h  ; ;
 	              00181830
-1046:     -	C5DD  0C183060	    .BYTE   00Ch, 018h, 030h, 060h, 030h, 018h, 00Ch, 000h  ; <
+1076:     -	C5F3  0C183060	    .BYTE   00Ch, 018h, 030h, 060h, 030h, 018h, 00Ch, 000h  ; <
 	              30180C00
-1047:     -	C5E5  00007E00	    .BYTE   000h, 000h, 07Eh, 000h, 07Eh, 000h, 000h, 000h  ; =
+1077:     -	C5FB  00007E00	    .BYTE   000h, 000h, 07Eh, 000h, 07Eh, 000h, 000h, 000h  ; =
 	              7E000000
-1048:     -	C5ED  30180C06	    .BYTE   030h, 018h, 00Ch, 006h, 00Ch, 018h, 030h, 000h  ; >
+1078:     -	C603  30180C06	    .BYTE   030h, 018h, 00Ch, 006h, 00Ch, 018h, 030h, 000h  ; >
 	              0C183000
-1049:     -	C5F5  3C66060C	    .BYTE   03Ch, 066h, 006h, 00Ch, 018h, 000h, 018h, 000h  ; ?
+1079:     -	C60B  3C66060C	    .BYTE   03Ch, 066h, 006h, 00Ch, 018h, 000h, 018h, 000h  ; ?
 	              18001800
-1050:				    
-1051:     -	C5FD  3E636F6F	    .BYTE   03Eh, 063h, 06Fh, 06Fh, 06Fh, 060h, 03Ch, 000h  ; @
+1080:				    
+1081:     -	C613  3E636F6F	    .BYTE   03Eh, 063h, 06Fh, 06Fh, 06Fh, 060h, 03Ch, 000h  ; @
 	              6F603C00
-1052:     -	C605  183C6666	    .BYTE   018h, 03Ch, 066h, 066h, 07Eh, 066h, 066h, 000h  ; A
+1082:     -	C61B  183C6666	    .BYTE   018h, 03Ch, 066h, 066h, 07Eh, 066h, 066h, 000h  ; A
 	              7E666600
-1053:     -	C60D  7E33333E	    .BYTE   07Eh, 033h, 033h, 03Eh, 033h, 033h, 07Eh, 000h  ; B
+1083:     -	C623  7E33333E	    .BYTE   07Eh, 033h, 033h, 03Eh, 033h, 033h, 07Eh, 000h  ; B
 	              33337E00
-1054:     -	C615  1E336060	    .BYTE   01Eh, 033h, 060h, 060h, 060h, 033h, 01Eh, 000h  ; C
+1084:     -	C62B  1E336060	    .BYTE   01Eh, 033h, 060h, 060h, 060h, 033h, 01Eh, 000h  ; C
 	              60331E00
-1055:     -	C61D  7C363333	    .BYTE   07Ch, 036h, 033h, 033h, 033h, 036h, 07Ch, 000h  ; D
+1085:     -	C633  7C363333	    .BYTE   07Ch, 036h, 033h, 033h, 033h, 036h, 07Ch, 000h  ; D
 	              33367C00
-1056:     -	C625  7F31343C	    .BYTE   07Fh, 031h, 034h, 03Ch, 034h, 031h, 07Fh, 000h  ; E
+1086:     -	C63B  7F31343C	    .BYTE   07Fh, 031h, 034h, 03Ch, 034h, 031h, 07Fh, 000h  ; E
 	              34317F00
-1057:     -	C62D  7F31343C	    .BYTE   07Fh, 031h, 034h, 03Ch, 034h, 030h, 078h, 000h  ; F
+1087:     -	C643  7F31343C	    .BYTE   07Fh, 031h, 034h, 03Ch, 034h, 030h, 078h, 000h  ; F
 	              34307800
-1058:     -	C635  1E336060	    .BYTE   01Eh, 033h, 060h, 060h, 067h, 033h, 01Fh, 000h  ; G
+1088:     -	C64B  1E336060	    .BYTE   01Eh, 033h, 060h, 060h, 067h, 033h, 01Fh, 000h  ; G
 	              67331F00
-1059:     -	C63D  6666667E	    .BYTE   066h, 066h, 066h, 07Eh, 066h, 066h, 066h, 000h  ; H
+1089:     -	C653  6666667E	    .BYTE   066h, 066h, 066h, 07Eh, 066h, 066h, 066h, 000h  ; H
 	              66666600
-1060:     -	C645  3C181818	    .BYTE   03Ch, 018h, 018h, 018h, 018h, 018h, 03Ch, 000h  ; I
+1090:     -	C65B  3C181818	    .BYTE   03Ch, 018h, 018h, 018h, 018h, 018h, 03Ch, 000h  ; I
 	              18183C00
-1061:     -	C64D  0F060606	    .BYTE   00Fh, 006h, 006h, 006h, 066h, 066h, 03Ch, 000h  ; J
+1091:     -	C663  0F060606	    .BYTE   00Fh, 006h, 006h, 006h, 066h, 066h, 03Ch, 000h  ; J
 	              66663C00
-1062:     -	C655  7333363C	    .BYTE   073h, 033h, 036h, 03Ch, 036h, 033h, 073h, 000h  ; K
+1092:     -	C66B  7333363C	    .BYTE   073h, 033h, 036h, 03Ch, 036h, 033h, 073h, 000h  ; K
 	              36337300
-1063:     -	C65D  70303030	    .BYTE   070h, 030h, 030h, 030h, 031h, 033h, 07Fh, 000h  ; L
+1093:     -	C673  70303030	    .BYTE   070h, 030h, 030h, 030h, 031h, 033h, 07Fh, 000h  ; L
 	              31337F00
-1064:     -	C665  63777F7F	    .BYTE   063h, 077h, 07Fh, 07Fh, 06Bh, 063h, 063h, 000h  ; M
+1094:     -	C67B  63777F7F	    .BYTE   063h, 077h, 07Fh, 07Fh, 06Bh, 063h, 063h, 000h  ; M
 	              6B636300
-1065:     -	C66D  63737B6F	    .BYTE   063h, 073h, 07Bh, 06Fh, 067h, 063h, 063h, 000h  ; N
+1095:     -	C683  63737B6F	    .BYTE   063h, 073h, 07Bh, 06Fh, 067h, 063h, 063h, 000h  ; N
 	              67636300
-1066:     -	C675  1C366363	    .BYTE   01Ch, 036h, 063h, 063h, 063h, 036h, 01Ch, 000h  ; O
+1096:     -	C68B  1C366363	    .BYTE   01Ch, 036h, 063h, 063h, 063h, 036h, 01Ch, 000h  ; O
 	              63361C00
-1067:				    
-1068:     -	C67D  7E33333E	    .BYTE   07Eh, 033h, 033h, 03Eh, 030h, 030h, 078h, 000h  ; P
+1097:				    
+1098:     -	C693  7E33333E	    .BYTE   07Eh, 033h, 033h, 03Eh, 030h, 030h, 078h, 000h  ; P
 	              30307800
-1069:     -	C685  3C666666	    .BYTE   03Ch, 066h, 066h, 066h, 066h, 06Eh, 03Ch, 00Eh  ; Q
+1099:     -	C69B  3C666666	    .BYTE   03Ch, 066h, 066h, 066h, 066h, 06Eh, 03Ch, 00Eh  ; Q
 	              666E3C0E
-1070:     -	C68D  7E33333E	    .BYTE   07Eh, 033h, 033h, 03Eh, 036h, 033h, 073h, 000h  ; R
+1100:     -	C6A3  7E33333E	    .BYTE   07Eh, 033h, 033h, 03Eh, 036h, 033h, 073h, 000h  ; R
 	              36337300
-1071:     -	C695  3C667038	    .BYTE   03Ch, 066h, 070h, 038h, 00Eh, 066h, 03Ch, 000h  ; S
+1101:     -	C6AB  3C667038	    .BYTE   03Ch, 066h, 070h, 038h, 00Eh, 066h, 03Ch, 000h  ; S
 	              0E663C00
-1072:     -	C69D  7E5A1818	    .BYTE   07Eh, 05Ah, 018h, 018h, 018h, 018h, 03Ch, 000h  ; T
+1102:     -	C6B3  7E5A1818	    .BYTE   07Eh, 05Ah, 018h, 018h, 018h, 018h, 03Ch, 000h  ; T
 	              18183C00
-1073:     -	C6A5  66666666	    .BYTE   066h, 066h, 066h, 066h, 066h, 066h, 07Eh, 000h  ; U
+1103:     -	C6BB  66666666	    .BYTE   066h, 066h, 066h, 066h, 066h, 066h, 07Eh, 000h  ; U
 	              66667E00
-1074:     -	C6AD  66666666	    .BYTE   066h, 066h, 066h, 066h, 066h, 03Ch, 018h, 000h  ; V
+1104:     -	C6C3  66666666	    .BYTE   066h, 066h, 066h, 066h, 066h, 03Ch, 018h, 000h  ; V
 	              663C1800
-1075:     -	C6B5  6363636B	    .BYTE   063h, 063h, 063h, 06Bh, 07Fh, 077h, 063h, 000h  ; W
+1105:     -	C6CB  6363636B	    .BYTE   063h, 063h, 063h, 06Bh, 07Fh, 077h, 063h, 000h  ; W
 	              7F776300
-1076:     -	C6BD  6363361C	    .BYTE   063h, 063h, 036h, 01Ch, 01Ch, 036h, 063h, 000h  ; X
+1106:     -	C6D3  6363361C	    .BYTE   063h, 063h, 036h, 01Ch, 01Ch, 036h, 063h, 000h  ; X
 	              1C366300
-1077:     -	C6C5  6666663C	    .BYTE   066h, 066h, 066h, 03Ch, 018h, 018h, 03Ch, 000h  ; Y
+1107:     -	C6DB  6666663C	    .BYTE   066h, 066h, 066h, 03Ch, 018h, 018h, 03Ch, 000h  ; Y
 	              18183C00
-1078:     -	C6CD  7F63460C	    .BYTE   07Fh, 063h, 046h, 00Ch, 019h, 033h, 07Fh, 000h  ; Z
+1108:     -	C6E3  7F63460C	    .BYTE   07Fh, 063h, 046h, 00Ch, 019h, 033h, 07Fh, 000h  ; Z
 	              19337F00
-1079:     -	C6D5  3C303030	    .BYTE   03Ch, 030h, 030h, 030h, 030h, 030h, 03Ch, 000h  ; [
+1109:     -	C6EB  3C303030	    .BYTE   03Ch, 030h, 030h, 030h, 030h, 030h, 03Ch, 000h  ; [
 	              30303C00
-1080:     -	C6DD  6030180C	    .BYTE   060h, 030h, 018h, 00Ch, 006h, 003h, 001h, 000h  ; \
+1110:     -	C6F3  6030180C	    .BYTE   060h, 030h, 018h, 00Ch, 006h, 003h, 001h, 000h  ; \
 	              06030100
-1081:     -	C6E5  3C0C0C0C	    .BYTE   03Ch, 00Ch, 00Ch, 00Ch, 00Ch, 00Ch, 03Ch, 000h  ; ]
+1111:     -	C6FB  3C0C0C0C	    .BYTE   03Ch, 00Ch, 00Ch, 00Ch, 00Ch, 00Ch, 03Ch, 000h  ; ]
 	              0C0C3C00
-1082:     -	C6ED  081C3663	    .BYTE   008h, 01Ch, 036h, 063h, 000h, 000h, 000h, 000h  ; ^
+1112:     -	C703  081C3663	    .BYTE   008h, 01Ch, 036h, 063h, 000h, 000h, 000h, 000h  ; ^
 	              00000000
-1083:     -	C6F5  00000000	    .BYTE   000h, 000h, 000h, 000h, 000h, 000h, 000h, 0FFh  ; underline
+1113:     -	C70B  00000000	    .BYTE   000h, 000h, 000h, 000h, 000h, 000h, 000h, 0FFh  ; underline
 	              000000FF
-1084:				    
-1085:     -	C6FD  18180C00	    .BYTE   018h, 018h, 00Ch, 000h, 000h, 000h, 000h, 000h  ; `
+1114:				    
+1115:     -	C713  18180C00	    .BYTE   018h, 018h, 00Ch, 000h, 000h, 000h, 000h, 000h  ; `
 	              00000000
-1086:     -	C705  00003C06	    .BYTE   000h, 000h, 03Ch, 006h, 03Eh, 066h, 03Bh, 000h  ; a
+1116:     -	C71B  00003C06	    .BYTE   000h, 000h, 03Ch, 006h, 03Eh, 066h, 03Bh, 000h  ; a
 	              3E663B00
-1087:     -	C70D  7030303E	    .BYTE   070h, 030h, 030h, 03Eh, 033h, 033h, 06Eh, 000h  ; b
+1117:     -	C723  7030303E	    .BYTE   070h, 030h, 030h, 03Eh, 033h, 033h, 06Eh, 000h  ; b
 	              33336E00
-1088:     -	C715  00003C66	    .BYTE   000h, 000h, 03Ch, 066h, 060h, 066h, 03Ch, 000h  ; c
+1118:     -	C72B  00003C66	    .BYTE   000h, 000h, 03Ch, 066h, 060h, 066h, 03Ch, 000h  ; c
 	              60663C00
-1089:     -	C71D  0E06063E	    .BYTE   00Eh, 006h, 006h, 03Eh, 066h, 066h, 03Bh, 000h  ; d
+1119:     -	C733  0E06063E	    .BYTE   00Eh, 006h, 006h, 03Eh, 066h, 066h, 03Bh, 000h  ; d
 	              66663B00
-1090:     -	C725  00003C66	    .BYTE   000h, 000h, 03Ch, 066h, 07Eh, 060h, 03Ch, 000h  ; e
+1120:     -	C73B  00003C66	    .BYTE   000h, 000h, 03Ch, 066h, 07Eh, 060h, 03Ch, 000h  ; e
 	              7E603C00
-1091:     -	C72D  1C363078	    .BYTE   01Ch, 036h, 030h, 078h, 030h, 030h, 078h, 000h  ; f
+1121:     -	C743  1C363078	    .BYTE   01Ch, 036h, 030h, 078h, 030h, 030h, 078h, 000h  ; f
 	              30307800
-1092:     -	C735  00003B66	    .BYTE   000h, 000h, 03Bh, 066h, 066h, 03Eh, 006h, 07Ch  ; g
+1122:     -	C74B  00003B66	    .BYTE   000h, 000h, 03Bh, 066h, 066h, 03Eh, 006h, 07Ch  ; g
 	              663E067C
-1093:     -	C73D  7030363B	    .BYTE   070h, 030h, 036h, 03Bh, 033h, 033h, 073h, 000h  ; h
+1123:     -	C753  7030363B	    .BYTE   070h, 030h, 036h, 03Bh, 033h, 033h, 073h, 000h  ; h
 	              33337300
-1094:     -	C745  18003818	    .BYTE   018h, 000h, 038h, 018h, 018h, 018h, 03Ch, 000h  ; i
+1124:     -	C75B  18003818	    .BYTE   018h, 000h, 038h, 018h, 018h, 018h, 03Ch, 000h  ; i
 	              18183C00
-1095:     -	C74D  06000606	    .BYTE   006h, 000h, 006h, 006h, 006h, 066h, 066h, 03Ch  ; j
+1125:     -	C763  06000606	    .BYTE   006h, 000h, 006h, 006h, 006h, 066h, 066h, 03Ch  ; j
 	              0666663C
-1096:     -	C755  70303336	    .BYTE   070h, 030h, 033h, 036h, 03Ch, 036h, 073h, 000h  ; k
+1126:     -	C76B  70303336	    .BYTE   070h, 030h, 033h, 036h, 03Ch, 036h, 073h, 000h  ; k
 	              3C367300
-1097:     -	C75D  38181818	    .BYTE   038h, 018h, 018h, 018h, 018h, 018h, 03Ch, 000h  ; l
+1127:     -	C773  38181818	    .BYTE   038h, 018h, 018h, 018h, 018h, 018h, 03Ch, 000h  ; l
 	              18183C00
-1098:     -	C765  0000667F	    .BYTE   000h, 000h, 066h, 07Fh, 07Fh, 06Bh, 063h, 000h  ; m
+1128:     -	C77B  0000667F	    .BYTE   000h, 000h, 066h, 07Fh, 07Fh, 06Bh, 063h, 000h  ; m
 	              7F6B6300
-1099:     -	C76D  00007C66	    .BYTE   000h, 000h, 07Ch, 066h, 066h, 066h, 066h, 000h  ; n
+1129:     -	C783  00007C66	    .BYTE   000h, 000h, 07Ch, 066h, 066h, 066h, 066h, 000h  ; n
 	              66666600
-1100:     -	C775  00003C66	    .BYTE   000h, 000h, 03Ch, 066h, 066h, 066h, 03Ch, 000h  ; o
+1130:     -	C78B  00003C66	    .BYTE   000h, 000h, 03Ch, 066h, 066h, 066h, 03Ch, 000h  ; o
 	              66663C00
-1101:				    
-1102:     -	C77D  00006E33	    .BYTE   000h, 000h, 06Eh, 033h, 033h, 03Eh, 030h, 078h  ; p
+1131:				    
+1132:     -	C793  00006E33	    .BYTE   000h, 000h, 06Eh, 033h, 033h, 03Eh, 030h, 078h  ; p
 	              333E3078
-1103:     -	C785  00003B66	    .BYTE   000h, 000h, 03Bh, 066h, 066h, 03Eh, 006h, 00Fh  ; q
+1133:     -	C79B  00003B66	    .BYTE   000h, 000h, 03Bh, 066h, 066h, 03Eh, 006h, 00Fh  ; q
 	              663E060F
-1104:     -	C78D  00006E3B	    .BYTE   000h, 000h, 06Eh, 03Bh, 033h, 030h, 078h, 000h  ; r
+1134:     -	C7A3  00006E3B	    .BYTE   000h, 000h, 06Eh, 03Bh, 033h, 030h, 078h, 000h  ; r
 	              33307800
-1105:     -	C795  00003E60	    .BYTE   000h, 000h, 03Eh, 060h, 03Ch, 006h, 07Ch, 000h  ; s
+1135:     -	C7AB  00003E60	    .BYTE   000h, 000h, 03Eh, 060h, 03Ch, 006h, 07Ch, 000h  ; s
 	              3C067C00
-1106:     -	C79D  08183E18	    .BYTE   008h, 018h, 03Eh, 018h, 018h, 01Ah, 00Ch, 000h  ; t
+1136:     -	C7B3  08183E18	    .BYTE   008h, 018h, 03Eh, 018h, 018h, 01Ah, 00Ch, 000h  ; t
 	              181A0C00
-1107:     -	C7A5  00006666	    .BYTE   000h, 000h, 066h, 066h, 066h, 066h, 03Bh, 000h  ; u
+1137:     -	C7BB  00006666	    .BYTE   000h, 000h, 066h, 066h, 066h, 066h, 03Bh, 000h  ; u
 	              66663B00
-1108:     -	C7AD  00006666	    .BYTE   000h, 000h, 066h, 066h, 066h, 03Ch, 018h, 000h  ; v
+1138:     -	C7C3  00006666	    .BYTE   000h, 000h, 066h, 066h, 066h, 03Ch, 018h, 000h  ; v
 	              663C1800
-1109:     -	C7B5  0000636B	    .BYTE   000h, 000h, 063h, 06Bh, 07Fh, 07Fh, 036h, 000h  ; w
+1139:     -	C7CB  0000636B	    .BYTE   000h, 000h, 063h, 06Bh, 07Fh, 07Fh, 036h, 000h  ; w
 	              7F7F3600
-1110:     -	C7BD  00006336	    .BYTE   000h, 000h, 063h, 036h, 01Ch, 036h, 063h, 000h  ; x
+1140:     -	C7D3  00006336	    .BYTE   000h, 000h, 063h, 036h, 01Ch, 036h, 063h, 000h  ; x
 	              1C366300
-1111:     -	C7C5  00006666	    .BYTE   000h, 000h, 066h, 066h, 066h, 03Eh, 006h, 07Ch  ; y
+1141:     -	C7DB  00006666	    .BYTE   000h, 000h, 066h, 066h, 066h, 03Eh, 006h, 07Ch  ; y
 	              663E067C
-1112:     -	C7CD  00007E4C	    .BYTE   000h, 000h, 07Eh, 04Ch, 018h, 032h, 07Eh, 000h  ; z
+1142:     -	C7E3  00007E4C	    .BYTE   000h, 000h, 07Eh, 04Ch, 018h, 032h, 07Eh, 000h  ; z
 	              18327E00
-1113:     -	C7D5  0E181870	    .BYTE   00Eh, 018h, 018h, 070h, 018h, 018h, 00Eh, 000h  ; {
+1143:     -	C7EB  0E181870	    .BYTE   00Eh, 018h, 018h, 070h, 018h, 018h, 00Eh, 000h  ; {
 	              18180E00
-1114:     -	C7DD  18181818	    .BYTE   018h, 018h, 018h, 018h, 018h, 018h, 018h, 000h  ; |
+1144:     -	C7F3  18181818	    .BYTE   018h, 018h, 018h, 018h, 018h, 018h, 018h, 000h  ; |
 	              18181800
-1115:     -	C7E5  7018180E	    .BYTE   070h, 018h, 018h, 00Eh, 018h, 018h, 070h, 000h  ; }
+1145:     -	C7FB  7018180E	    .BYTE   070h, 018h, 018h, 00Eh, 018h, 018h, 070h, 000h  ; }
 	              18187000
-1116:     -	C7ED  3B6E0000	    .BYTE   03Bh, 06Eh, 000h, 000h, 000h, 000h, 000h, 000h  ; ~
+1146:     -	C803  3B6E0000	    .BYTE   03Bh, 06Eh, 000h, 000h, 000h, 000h, 000h, 000h  ; ~
 	              00000000
-1117:     -	C7F5  7E819DA1	    .BYTE   07Eh, 081h, 09Dh, 0A1h, 0A1h, 09Dh, 081h, 07Eh  ; (c)
+1147:     -	C80B  7E819DA1	    .BYTE   07Eh, 081h, 09Dh, 0A1h, 0A1h, 09Dh, 081h, 07Eh  ; (c)
 	              A19D817E
-1118:     -	C7FD          	charSetEnd:
-1119:				
-1120:				;==============================================================================
-1121:     -	C7FD          	    .END
+1148:     -	C813          	charSetEnd:
+1149:				
+1150:				;==============================================================================
+1151:     -	C813          	    .END
 
 
 
@@ -1286,7 +1316,7 @@ Statistics:
      4	passes
      0	jr promotions
    139	symbols
-  2045	bytes
+  2067	bytes
 
     45	macro calls
    273	macro bytes
@@ -1341,97 +1371,97 @@ UART_MCR       =E9        233
 UART_MSR       =ED        237
 UART_SCR       =EF        239
 UFLOAT_NLF     =1D58      7512
-UartCheck       3271      12913
-UartCheckExit   3283      12931
-UartExit        32A8      12968
-UartRx          3284      12932
-UartRxLoop      3290      12944
-UartRxWait      3289      12937
-UartSet         3262      12898
-UartTx          32B0      12976
-UartTxLoop      32BC      12988
-UartTxWait      32B5      12981
+UartCheck       3289      12937
+UartCheckExit   329B      12955
+UartExit        32BF      12991
+UartRx          329C      12956
+UartRxLoop      32AA      12970
+UartRxWait      32A0      12960
+UartSet         327A      12922
+UartTx          32C7      12999
+UartTxLoop      32D5      13013
+UartTxWait      32CB      13003
 XDICT          =3000      12288
 XROM           =C000      49152
-baudLink        312C      12588
-baudName        3126      12582
-blackLink       31D2      12754
-blackName       31CB      12747
-blueLink        31F0      12784
-blueName        31EA      12778
-borderLink      3174      12660
-borderName      316C      12652
-charSet         C3FD      50173
-charSetEnd      C7FD      51197
+baudLink        3121      12577
+baudName        311B      12571
+blackLink       31C7      12743
+blackName       31C0      12736
+blueLink        31E5      12773
+blueName        31DF      12767
+borderLink      3169      12649
+borderName      3161      12641
+charSet         C413      50195
+charSetEnd      C813      51219
 clearScreen     C0DF      49375
 clsLoop         C0E8      49384
-cmoveExit       304D      12365
+cmove           325F      12895
 cmoveLink       303C      12348
 cmoveName       3035      12341
+cmoveUp         3277      12919
 colorBarLoop    C068      49256
 countLink       3007      12295
 countName       3000      12288
-cyanLink        320D      12813
-cyanName        3207      12807
-darkLink        3257      12887
-darkName        3251      12881
-depthLink       3074      12404
-depthName       306D      12397
+cyanLink        3202      12802
+cyanName        31FC      12796
+darkLink        324C      12876
+darkName        3246      12870
+depthLink       3069      12393
+depthName       3062      12386
 dictExp         C126      49446
-dictExpEnd      C3FD      50173
+dictExpEnd      C413      50195
 drawBarPair     C048      49224
 drawLongBar     C107      49415
 drawShortBar    C0F9      49401
-fillExit        306B      12395
-fillLink        3055      12373
-fillLoop        3064      12388
-fillName        304F      12367
-fontLink        310B      12555
-fontName        3105      12549
+fill            3257      12887
+fillLink        3052      12370
+fillName        304C      12364
+fontLink        3100      12544
+fontName        30FA      12538
 forthPopBC     = 84E      2126
-greenLink       31FF      12799
-greenName       31F8      12792
-greyLink        31E2      12770
-greyName        31DC      12764
-hexLink         3094      12436
-hexName         308F      12431
-inkLink         3194      12692
-inkName         318F      12687
+greenLink       31F4      12788
+greenName       31ED      12781
+greyLink        31D7      12759
+greyName        31D1      12753
+hexLink         3089      12425
+hexName         3084      12420
+inkLink         3189      12681
+inkName         3184      12676
 longBarLoop     C109      49417
-mpageLink       30CF      12495
-mpageName       30C8      12488
-paperLink       31B0      12720
-paperName       31A9      12713
+mpageLink       30C4      12484
+mpageName       30BD      12477
+paperLink       31A5      12709
+paperName       319E      12702
 printStr        C0F1      49393
-psgrLink        30B9      12473
-psgrName        30B3      12467
-psgwLink        30A6      12454
-psgwName        30A0      12448
+psgrLink        30AE      12462
+psgrName        30A8      12456
+psgwLink        309B      12443
+psgwName        3095      12437
 pstoreLink      3018      12312
 pstoreName      3014      12308
-purpleLink      322A      12842
-purpleName      3222      12834
+purpleLink      321F      12831
+purpleName      3217      12823
 questionLink    302C      12332
 questionName    3029      12329
 quitToForth    =9B        155
 redBar          C11F      49439
-redLink         321A      12826
-redName         3215      12821
-rxLink          315D      12637
-rxName          3159      12633
+redLink         320F      12815
+redName         320A      12810
+rxLink          3152      12626
+rxName          314E      12622
 scanKbrd       = 336      822
-screenLink      30EC      12524
-screenName      30E4      12516
+screenLink      30E1      12513
+screenName      30D9      12505
 shortBarLoop    C0FB      49403
-stackByte       31D7      12759
+stackByteAndFinish 31CC      12748
 strII           C117      49431
 strJupiter      C10F      49423
 strYear         C11A      49434
-txLink          314A      12618
-txName          3146      12614
+txLink          313F      12607
+txName          313B      12603
 waitKeyPress    C0BD      49341
 waitKeyRelease  C0B7      49335
-whiteLink       3249      12873
-whiteName       3242      12866
-yellowLink      323A      12858
-yellowName      3232      12850
+whiteLink       323E      12862
+whiteName       3237      12855
+yellowLink      322F      12847
+yellowName      3227      12839
