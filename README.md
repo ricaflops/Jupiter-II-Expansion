@@ -18,24 +18,19 @@ Hardware validated. Sound, colors and paging working fine.<br/>
 Working on FORTH vocabulary extension at reset.<br/>
 Next shall start working on serial interfacing.
 
-## FORTH code to try
-First move RAMTOP down with
+## FORTH code examples
+### Memory Paging
 ```
-32768 15384 ! QUIT
+0 FONT  ( select alternative character set )
+1 FONT  ( select original character set )
+
+0 SCREEN ( select screen page 0 )
+1 SCREEN ( select screen page 1 )
+
+0 MPAGE ( select memory page 0 )
+3 MPAGE ( select memory page 3 )
 ```
-Then add a small vocabulary to talk to the Programmable Sound Generator
-```
-: PSG> 253 OUT ; ( register -- )
-: PSG! PSG> 255 OUT ; ( value register -- )
-: PSG@ PSG> 255 IN ; ( reg -- value )
-```
-.. and set initial values to PSG I/O ports
-```
-191 15 PSG! ( PAPER=White, INK=Dark Blue )
-241 14 PSG! ( BORDER=Cyan, Memory page=3, Char set=1, Screen page=1 )
-192 7 PSG!  ( Enable ports as Outputs )
-```
-### Sound Examples in FORTH
+### Sound
 ```
 : TONEON
   200 0 PSG!
@@ -63,33 +58,8 @@ Then add a small vocabulary to talk to the Programmable Sound Generator
   1  13 PSG!
 ;
 ```
-### Screen Colors and Memory Paging in FORTH
+### Colors
 ```
-: INK ( color -- : Set character color )
- 15 AND 14 PSG@ 240 AND OR 14 PSG! ;
-
-: PAPER ( color -- : Set character background color )
- 15 AND 16 * 14 PSG@ 15 AND OR 14 PSG! ;
- 
-: BORDER ( color -- : Set screen border color )
- 15 AND 16 * 15 PSG@ 15 AND OR 15 PSG! ;
-
-: MPAGE ( page -- : Select Memory page )
- 3 AND 15 PSG@ 252 AND OR 15 PSG! ;
-
-( Colors )
- 0 CONSTANT BLACK
- 8 CONSTANT GREY
- 9 CONSTANT BLUE
-10 CONSTANT GREEN
-11 CONSTANT CYAN
-12 CONSTANT RED
-13 CONSTANT MAGENTA
-14 CONSTANT YELLOW
-15 CONSTANT WHITE
-: DARK (color -- darkcolor ) 7 AND ;
-
-( Examples )
 CYAN BORDER ( Change screen border color )
 WHITE PAPER ( Set char background color )
 BLUE DARK INK ( Set char foreground color ) 
@@ -118,14 +88,22 @@ BLUE DARK INK ( Set char foreground color )
  
 RAINBOW ( Show color bars )
 ```
+### Serial Data Transfer
+```
+4800 BAUD ( Configure UART to 4800 Baud Rate )
+15441 526 TX (Transmit 526 bytes starting at address 15441 )
+```
 # Extra FORTH Words
-**Work in progress..**
 
 ### Standard words
 ```
-HEX   ( -- ) Set numeric base to Hexadecimal
-CMOVE ( addr1 addr2 n -- ) Copy 'n' bytes from 'addr1' to 'addr2'
-FILL  ( addr n c -- ) Fill 'n' bytes with 'c' starting from 'addr'
+COUNT ( addr -- addr+1 c )  Extract String length
++! ( n addr -- )  Add 'n' to 'addr' variable
+? ( addr -- )  Print variable value
+CMOVE ( addr1 addr2 n -- )  Copy 'n' bytes from 'addr1' to 'addr2'
+FILL  ( addr n c -- )  Fill 'n' bytes with 'c' starting from 'addr'
+DEPTH ( -- n )  Data Stack Depth
+HEX   ( -- )  Set numeric base to Hexadecimal
 ```
 ### Programmable Sound Generator
 ```
@@ -137,6 +115,12 @@ PSG@ ( reg -- c ) Read PSG register 'reg' contents
 MPAGE  ( c -- ) Select memory page 'c' , 0 to 3
 SCREEN ( c -- ) Select Screen page 'c' , 0 or 1
 FONT   ( c -- ) Select character set 'c' , 0 or 1
+```
+### Serial Communication
+```
+BAUD ( n --  )  Set UART to Baud rate 'n'
+TX ( addr n --  )  Transmit 'n' bytes starting from 'addr' to serial line
+RX ( addr n --  )  Receive 'n' bytes from serial line to memory 'addr'
 ```
 ### Color
 ```
