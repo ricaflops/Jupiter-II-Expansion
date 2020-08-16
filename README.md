@@ -59,9 +59,7 @@ COLORBAR ( Show a colorfull bar )
 ```
 
 ### Serial Comm Port
-
 8 data bits, 1 stop bit, no parity.
-
 ```
 CREATE BUFFER 256 ALLOT ( Create and Allocate a memory space to work )
 ( Add some testing words )
@@ -74,12 +72,9 @@ BUFFER 256 RX ( Receive 256 bytes from serial line )
 PRTBUF        ( View received data )
 BUFFER 256 TX ( Transmit 256 bytes over serial line )
 ```
-
 Note: use Space key to abort communication if needed.
 
-# Technical details
-
-## Extra FORTH vocabulary
+# Extra FORTH vocabulary
 The extended vocabulary is copied from XROM to a unused 1K RAM area at $3000-$33FF of Jupiter-II during initialization.
 That allows safe memory paging while keeping the extra Words accessible.
 
