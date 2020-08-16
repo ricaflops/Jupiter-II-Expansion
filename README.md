@@ -62,11 +62,9 @@ COLORBAR ( Show a colorfull bar )
 
 8 data bits, 1 stop bit, no parity.
 
-'''
-( Create and Allocate a memory space to work )
-CREATE BUFFER
-256 ALLOT
-( Add some vocabulary to test )
+```
+CREATE BUFFER 256 ALLOT ( Create and Allocate a memory space to work )
+( Add some testing words )
 : CLRBUF 256 0 DO 32 BUFFER I + C! LOOP ; ( Clear Buffer )
 : PRTBUF CR 256 0 DO BUFFER I + EMIT LOOP CR ; ( Print Buffer )
 
@@ -75,7 +73,7 @@ CLRBUF        ( Clear Buffer )
 BUFFER 256 RX ( Receive 256 bytes from serial line )
 PRTBUF        ( View received data )
 BUFFER 256 TX ( Transmit 256 bytes over serial line )
-'''
+```
 
 Note: use Space key to abort communication if needed.
 
