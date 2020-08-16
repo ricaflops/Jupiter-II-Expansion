@@ -1,0 +1,1121 @@
+;==============================================================================
+; XROM for Jupiter-II Expansion
+; 2020-Aug - Ricardo F. Lopes
+; 
+; Compile using Z80 ZMAC assembler: zmac xrom.z --oo lst,cim
+;==============================================================================
+
+; Patch to the original Jupiter Ace ROM to link to this code
+;   008E: C3 00 C0 00
+; That patch inserts XROM in the original ROM initialization process flow
+; Original Jupiter Ace ROM code:
+;   008E: ED 56      IM 1      ; Set Interrupt mode 1
+;   0090: 18 09      JR $009B  ; Quit to FORTH
+; Code after patch applied:
+;   008E: C3 00 C0   JP $C000  ; Redirect to XROM code
+;   0091: 00         NOP       ; ---
+
+;-----------------------------
+; Memory Locations
+XROM        .EQU $C000  ; XROM image offset
+XDICT       .EQU $3000  ; RAM area where extra FORTH words will reside
+PAGEDRAM    .EQU $8000  ; RAM paging above this address
+SCRNRAM     .EQU $2400  ; Screen Memory (video circuit priority)
+PADEND      .EQU $2700  ; End of PAD marker
+CHARRAM     .EQU $2C00  ; Character Set RAM Memory (video circuit priority)
+RAMTOP      .EQU $3C18  ; System Variable: 2 bytes, RAM top address + 1
+SCRPOS      .EQU $3C1C  ; System Variable: 2 bytes, Next print position in video RAM
+FORTH_LF    .EQU $3C47  ; FORTH word Link Field: point to last word Name Length Field
+UFLOAT_NLF  .EQU $1D58  ; UFLOAT word Name Length Field (last word in original ROM)
+SPARE       .EQU $3C3B  ; System Variable: 2 bytes, TOS Address + 2
+;-----------------------------
+; Lower ROM routines
+quitToForth .EQU $009B  ; FORTH QUIT
+scanKbrd    .EQU $0336  ; Keyboard Scan, return key code in Accumulator, 0 if no key pressed
+forthPopBC  .EQU $084E  ; Pop Top of Stack to BC register (affects HL)
+;-----------------------------
+; I/O Addresses: UART
+UART_DATA   .EQU $E1    ; Rx/Tx buffer register
+UART_DLL    .EQU $E1    ; Divisor Latch LSB (when DLAB=1)
+UART_IER    .EQU $E3    ; Interrupt Enable Register
+UART_DLM    .EQU $E3    ; Divisor Latch MSB (when DLAB=1)
+UART_IIR    .EQU $E5    ; IN: Interrupt Identifier Register
+UART_LCR    .EQU $E7    ; Line Control
+UART_MCR    .EQU $E9    ; Modem Control
+UART_LSR    .EQU $EB    ; Line Status
+UART_MSR    .EQU $ED    ; Modem Status
+UART_SCR    .EQU $EF    ; Scratch Register
+;-----------------------------
+; I/O Addresses: Programmabel Sound Generator
+PSG_REG     .EQU $FD    ; Z80 I/O address of PSG register selection
+PSG_VAL     .EQU $FF    ; Z80 I/O address of PSG register value
+;-----------------------------
+; rogrammabel Sound Generator Registers
+PSGenable   .EQU 7      ; PSG Register: Output channel enables and I/O Ports direction
+PSGportA    .EQU 14     ; PSG Register: Port A (PAPAER and INK color)
+PSGportB    .EQU 15     ; PSG Register: Port B (BORDER color and Memory Paging)
+;-----------------------------
+; some FORTH dictionary code fields
+F_HERE      .EQU $0460  ; HERE
+F_BASE      .EQU $048A  ; BASE
+F_SEMICOLON .EQU $04B6  ; ;
+F_FIND      .EQU $063D  ; FIND
+F_DIV       .EQU $0D51  ; /
+F_DUP       .EQU $086B  ; DUP
+F_SWAP      .EQU $0885  ; SWAP
+F_CFETCH    .EQU $0896  ; C@
+F_CSTORE    .EQU $08A5  ; C!
+F_FETCH     .EQU $08B3  ; @
+F_STORE     .EQU $08C1  ; !
+F_OVER      .EQU $0912  ; OVER
+F_DOT       .EQU $09B3  ; .
+F_PLUS      .EQU $0DD2  ; +
+F_MINUS     .EQU $0DE1  ; -
+F_1PLUS     .EQU $0E09  ; 1+
+F_2PLUS     .EQU $0E13  ; 2+
+CF_DO_COLON .EQU $0EC3  ; DoColon
+F_STK_WORD  .EQU $1011  ; Stack next word
+F_STK_BYTE  .EQU $104B  ; Stack byte
+DOCODE      .EQU $1A0E  ; from DO_COLON to ASM
+
+;==============================================================================
+; Macros ======================================================================
+;==============================================================================
+
+;-------------------------------
+; Set PSG register value
+PSGset .MACRO  value, register     
+    LD    A, register
+    OUT   (PSG_REG), A   ; Select PSG register
+    LD    A, value
+    OUT   (PSG_VAL), A   ; Set PSG register value
+.ENDM
+
+;-------------------------------
+; Print string at lin, col
+PrintAt .MACRO lin, col, str
+    LD    HL,str
+    LD    DE,SCRNRAM + col + (lin * 32)
+	CALL  printStr
+.ENDM
+
+;-------------------------------
+; FORTH coding: Return back to FORTH
+FORTHreturn .MACRO  
+    JP   (IY)
+.ENDM
+
+;-------------------------------
+; FORTH coding: Pop DE from FORTH data stack
+; Affects: HL
+FORTHpop .MACRO
+    RST  18H
+.ENDM
+
+;-------------------------------
+; FORTH coding: Push DE to FORTH Data stack
+; Affects: HL
+FORTHpush .MACRO 
+    RST 10H
+.ENDM
+
+;==============================================================================
+; XROM ========================================================================
+;==============================================================================
+    .ORG    XROM
+;-----------------------------  Initialize PSG
+    PSGset 11110001b, PSGportA     ; PAPER = White, INK = Dark Blue
+    PSGset 10110011b, PSGportB     ; BORDER = Cyan, CharSet = 0, Screen = 0, Memory Page = 3
+    PSGset 11111111b, PSGenable    ; Enable Ports A & B as outputs, disable Sound channels
+;-----------------------------  Install Character Set at FONT 0
+    LD    HL,charSet               ; Source: New Character set pattern
+    LD    DE,CHARRAM               ; Destination: Character Set RAM
+    LD    BC,charSetEnd - charSet  ; Bytes to copy
+    LDIR                           ; Do copy
+;-----------------------------  Install extra FORTH words
+    LD    HL,dictExp               ; Source: Extra FORTH words definition
+    LD    DE,XDICT                 ; Destination: Lower 1K RAM
+    LD    BC,dictExpEnd - dictExp  ; Bytes to copy
+    LDIR                           ; Do copy
+    ; Link Extra Words under FORTH word
+    LD    HL,darkLink              ; last defined extra word link field
+    LD    (FORTH_LF),HL            ; Replace original FORTH link to include expanded dictionary
+;----------------------------- Initialize Screen page 0	
+	CALL   clearScreen             ; Clear screen page 0
+    XOR    A
+    LD     (PADEND),A              ; Set PAD End marker
+;----------------------------- Splash Screen
+    PSGset 11111100b, PSGportA     ; PAPER = WHITE, INK = RED
+    ; draw 24 short red bars (12 pairs)
+    LD   HL,SCRNRAM + 11  ; Screen Position destination lin=0, col=11
+    LD   B,12             ; Print 12 bar pairs
+drawBarPair:
+	LD   DE,redBar        ; Draw Bar pattern 1	
+    CALL drawShortBar
+	LD   DE,redBar+1      ; Draw Bar pattern 2
+    CALL drawShortBar	
+	DEC  HL               ; Move one screen column to the left
+	DJNZ drawBarPair      ; Draw next pair
+    ; Draw first long red bar
+	LD    HL,SCRNRAM + 14 + (3 * 32) ; First bar at line 3, column 14
+    CALL  drawLongBar
+    ; Draw second long red bar
+	LD    HL,SCRNRAM + 14 + (4 * 32) ; Second bar at line 4, column 14
+    CALL  drawLongBar
+    ; Draw colors bar (INK=0..15)
+    LD    HL,SCRNRAM + 8 + (20 * 32) ; Color bar at line 20, column 8
+    LD    A,11110000b                ; PAPER = WHITE , INK = BLACK
+colorBarLoop:                   ; loop through the 16 colors
+    OUT   (PSG_VAL),A           ; Set next INK color
+    LD    (HL),90h              ; Print solid block character
+    INC   HL                    ; advance screen position
+    INC   A                     ; next color code for INK
+    JR    NZ,colorBarLoop       ; end bar when color code wraps to zero
+    ; Place Strings
+    LD    A,11110001b           ; PAPER = WHITE, INK = DARK BLUE
+    OUT   (PSG_VAL),A
+	PrintAt  3,  1, strJupiter  ; "Jupiter" at line  3, column  1
+    PrintAt  4,  6, strII       ; "II"      at line  4, column  6
+    PrintAt 22, 14, strYear     ; "2020"    at line 22, column 14
+;----------------------------- Play Initialization Tone
+    PSGset       203,  0        ; Tone A period = 1ms (1kHz)
+    PSGset 11111110b,  7        ; Channel A = Tone A
+    PSGset        24,  8        ; Channel A Volume = 75%
+    PSGset        25, 12        ; Envelope Period = 504 ms
+    PSGset 00000001b, 13        ; Envelope ramps down one cycle
+;----------------------------- Wait Keypress to clear screen
+waitKeyRelease:
+    CALL  scanKbrd
+    AND   A
+	JR    NZ,waitKeyRelease
+waitKeyPress:
+    CALL  scanKbrd
+    AND   A
+    JR    Z,waitKeyPress
+;----------------------------- Select Page 1 and Font set 1, Clear Screen
+	PSGset 10111111b, PSGportB  ; BORDER = Cyan, CharSet = 1, Screen = 1, Memory Page = 3
+    CALL  clearScreen
+;----------------------------- Initialize Serial Communication
+    LD    BC,24        ; UART Baud rate divisor for 9600 Baud
+    CALL  UartSet      ; (subroutine at XDICT space)
+;----------------------------- Limit RAMTOP to unpaged RAM and QUIT to FORTH
+    LD    HL,PAGEDRAM  ; Limit FORTH to unpaged RAM region below 32768
+    LD    (RAMTOP),HL  ; This allows for memory paging without fuss
+	IM    1            ; Select interrupt mode 1 (this was removed  in ROM patching)
+    JP    quitToForth  ; Quit to FORTH
+
+;==============================================================================
+; XROM Sub routines ===========================================================
+;==============================================================================
+
+; -----------------------------
+; Clear Screen 
+; -----------------------------
+; Fill screen RAM with space character
+; Affects: A, BC, HL, Flags
+clearScreen:
+    LD    HL,SCRNRAM   ; Start address = first screen position
+    LD    (SCRPOS),HL  ; Set cursor to Home (top left screen corner)
+	LD    BC,768       ; Screen positions to fill
+clsLoop:
+    LD    (HL),$20     ; Put SPACE char at current screen position
+	INC   HL           ; Advance screen position
+	DEC   BC           ; Count positions done
+	LD    A,B          ; Check if zero
+    OR    C
+	JR    NZ,clsLoop   ; keep filling until last screen position
+    RET
+
+; -----------------------------
+; Print String
+; -----------------------------
+; HL = source string address (first byte is string length)
+; DE = destination address
+; Affects: A, BC, HL, flags
+printStr:
+    LD    A,(HL)  ; Get string size
+	LD    C,A     ; BC = string length
+	LD    B,0
+	INC   HL      ; HL = string first character
+	LDIR          ; Copy string to destination address
+	RET
+
+; -----------------------------
+; Draw Short Horizontal Bar
+; -----------------------------
+; DE = points to bar pattern
+; HL = points to screen position to start drawing the bar
+; Affects: A, C, DE, HL
+; Output: HL = next screen line position
+drawShortBar:
+	LD   C,6              ; Pattern is 6 chars wide
+shortBarLoop:
+	LD   A,(DE)           ; get char from pattern
+	LD   (HL),A           ; put on screen
+	INC  DE               ; Move char source pointer
+	INC  HL               ; Move screen destination pointer
+	DEC  C                ; chars countdown
+	JR   NZ,shortBarLoop
+	
+	LD   DE,26            ; move screen pointer to next line 
+	ADD  HL,DE
+	RET
+	
+; -----------------------------
+; Draw Long Horizontal Bar
+; -----------------------------
+; Draw one long horizontal bar for splash screenString print routines
+; HL = screen address
+; Affects: B, HL, flags
+drawLongBar:
+	LD    B,18         ; Bar length
+longBarLoop:
+	LD    (HL),93h     ; Place half block character
+	INC   HL           ; Move to next screen position
+	DJNZ  longBarLoop  ; Draw next character
+	RET
+
+;==============================================================================
+; XROM Strings and constants ==================================================
+;==============================================================================
+
+strJupiter:  .BYTE   7, "Jupiter"
+strII:       .BYTE   2, "II"
+strYear:     .BYTE   4, "2020"
+redBar:      .BYTE   14h, 93h, 93h, 93h, 93h, 93h, 97h ; small graphic bar
+
+;==============================================================================
+; XDICT: FORTH Dictionary extension ===========================================
+;==============================================================================
+dictExp:
+;##############################################################################
+    .PHASE XDICT
+;##############################################################################	
+
+;-------------------------------
+; COUNT ( addr -- addr+1 c )
+;-------------------------------
+; Extract String length (code from the Jupiter Ace Manual)
+; : COUNT DUP 1+ SWAP C@ ;
+countName:
+    .DC    "COUNT"       ; Name Field: (DC sets bit 7 of last char)
+    .WORD  UFLOAT_NLF    ; Link Field: point to previous word Name Length Field
+countLink:
+    .BYTE  $ - countName - 2  ; Name Length Field
+    .WORD  CF_DO_COLON        ; Code Field Address: a FORTH word
+    ;----------
+    .WORD  F_DUP            ; DUP
+	.WORD  F_1PLUS          ; 1+
+    .WORD  F_SWAP           ; SWAP
+    .WORD  F_CFETCH         ; C@
+    .WORD  F_SEMICOLON      ; ; (end Forth word definition)
+
+;-------------------------------
+; +! ( n addr -- )
+;-------------------------------
+; Add 'n' to 'addr' contents (code from the Jupiter Ace Manual)
+; : +! SWAP OVER @ + SWAP ! ;
+pstoreName:
+    .DC    "+!"       ; Name Field: (DC sets bit 7 of last char)
+    .WORD  countLink  ; Link Field: point to previous word Name Length Field
+pstoreLink:
+    .BYTE  $ - pstoreName - 2  ; Name Length Field
+    .WORD  CF_DO_COLON         ; Code Field Address: a FORTH word
+    ;----------
+    .WORD  F_SWAP           ; SWAP
+    .WORD  F_OVER           ; OVER
+	.WORD  F_FETCH          ; @
+	.WORD  F_PLUS           ; +
+    .WORD  F_SWAP           ; SWAP
+	.WORD  F_STORE          ; !
+    .WORD  F_SEMICOLON      ; ; (end Forth word definition)
+	
+;-------------------------------
+; ? ( addr -- )
+;-------------------------------
+; Print address contents (code from the Jupiter Ace Manual)
+; : ? @ . ;
+questionName:
+    .DC    "?"         ; Name Field: (DC sets bit 7 of last char)
+    .WORD  pstoreLink  ; Link Field: point to previous word Name Length Field
+questionLink:
+    .BYTE  $ - questionName - 2  ; Name Length Field
+    .WORD  CF_DO_COLON           ; Code Field Address: a FORTH word
+    ;----------
+    .WORD  F_FETCH          ; @
+    .WORD  F_DOT            ; .
+    .WORD  F_SEMICOLON      ; ; (end Forth word definition)
+
+;-------------------------------
+; CMOVE ( addr1 addr2 n -- )
+;-------------------------------
+; Copy 'n' bytes from 'addr1' to 'addr2'
+cmoveName:
+    .DC    "CMOVE"       ; Name Fieldh (DC sets bit 7 of last char)
+    .WORD  questionLink  ; Link Field: previous defined word in vocabulary
+cmoveLink:
+    .BYTE  $ - cmoveName - 2  ; Name Length Field
+    .WORD  $ + 2              ; Code Field
+    ;----------
+	;***** TODO: make it work with overlaping addresses
+	CALL  forthPopBC   ; BC = bytes to move (from Top of Stack)
+    FORTHpop           ; Get destination address from Top of Stack to DE
+	PUSH  DE           ; Save Destination address
+	FORTHpop           ; Get source address from Top of Stack to DE
+	EX    DE,HL        ; HL = Source address
+	POP   DE           ; DE = Destination address
+	BIT   7,B          ; check if negative length
+	JR    NZ,cmoveExit ; Exit if so
+
+	LDIR               ; Copy bytes moving up  
+cmoveExit:
+    FORTHreturn        ; Return back to FORTH
+
+;-------------------------------
+; FILL ( addr n c -- )
+;-------------------------------
+; Fill 'n' bytes with 'c' value starting from 'addr'
+fillName:
+    .DC    "FILL"     ; Name Fieldh (DC sets bit 7 of last char)
+    .WORD  cmoveLink  ; Link Field: previous defined word in vocabulary
+fillLink:
+    .BYTE  $ - fillName - 2  ; Name Length Field
+    .WORD  $ + 2             ; Code Field
+    ;----------
+	FORTHpop          ; pop E = 'c' (D is irrelevant)
+    LD    A,E         ; save 'c'
+	CALL  forthPopBC  ; BC = 'n' (byte counter)
+	FORTHpop          ; pop DE = 'addr'
+	EX    DE,HL       ; HL = 'addr'
+	LD    E,A         ; E = 'c'
+
+    LD    A,B         ; Check if 'n' is zero
+    OR    C
+	JR    Z,fillExit  ; If 'n' = 0 , exit
+fillLoop:
+    LD    (HL),E      ; fill memory with 'c'
+    INC   HL          ; next destination address
+	DEC   BC          ; Byte Count
+	LD    A,B         ; Finished?
+	OR    C
+    JR    NZ,fillLoop ; Repeat 'n' times
+fillExit:
+    FORTHreturn       ; Return back to FORTH
+
+;-------------------------------
+; DEPTH ( -- n )
+;-------------------------------
+; Data Stack Depth (code from the Jupiter Ace Manual)
+; : DEPTH  15419 @ HERE 12 + - 2 / ;
+depthName:
+    .DC    "DEPTH"      ; Name Field: (DC sets bit 7 of last char)
+    .WORD  fillLink     ; Link Field: point to previous word Name Length Field
+depthLink:
+    .BYTE  $ - depthName - 2  ; Name Length Field
+    .WORD  CF_DO_COLON        ; Code Field Address: a FORTH word
+    ;----------
+    .WORD  F_STK_WORD       ; SPARE system variable
+	.WORD  SPARE     
+	.WORD  F_FETCH          ; @
+    .WORD  F_HERE           ; HERE
+	.WORD  F_STK_WORD       ; 12
+    .WORD  12        
+	.WORD  F_PLUS           ; +
+	.WORD  F_MINUS          ; -
+	.WORD  F_STK_WORD       ; 2
+	.WORD  2         
+    .WORD  F_DIV            ; /
+    .WORD  F_SEMICOLON      ; ; (end Forth word definition)	
+
+;-------------------------------
+;***** To Do: More Words to add *****
+;-------------------------------
+; ( from the Ace Manual )
+; : KEY ( -- c )  BEGIN INKEY ?DUP UNTIL ;
+; : ' ( -- n )  FIND 2+ ;
+; : .S ( print data stack contents )
+;   15419 @ HERE 12 +
+;   OVER OVER -
+;   IF  ( if stack not empty )
+;     DO
+;       I @ . 2
+;     +LOOP
+;   ELSE  ( stack is empty)
+;     DROP DROP
+;   THEN
+; ;
+; (others not from the manual
+; -TRAILING
+	
+;-------------------------------
+; HEX ( -- )
+;-------------------------------
+; Change numeric base to Hexadecimal
+hexName:
+    .DC    "HEX"         ; Name Field: (DC sets bit 7 of last char)
+    .WORD  depthLink     ; Link Field: point to previous word Name Length Field
+hexLink:
+    .BYTE  $ - hexName - 2  ; Name Length Field
+    .WORD  CF_DO_COLON      ; Code Field Address: a FORTH word
+    ;----------
+    .WORD  F_STK_BYTE       ; push following byte to Data Stack
+	.BYTE  16
+    .WORD  F_BASE           ; BASE
+    .WORD  F_CSTORE         ; C!
+    .WORD  F_SEMICOLON      ; ; (end Forth word definition)
+	
+;-------------------------------
+; PSG! ( c reg -- )
+;-------------------------------
+; Write 'c' to PSG register 'reg'
+psgwName:
+    .DC    "PSG!"       ; Name Fieldh (DC sets bit 7 of last char)
+    .WORD  hexLink      ; Link Field: point to previous word Name Length Field
+psgwLink:
+    .BYTE  $ - psgwName - 2  ; Name Length Field
+    .WORD  $ + 2             ; Code Field
+    ;----------
+    FORTHpop         ; Pop DE from FORTH data stack
+    LD   A,E         ; Use only the lower byte
+    OUT  (PSG_REG),A ; Select PSG register
+
+    FORTHpop         ; Pop DE from FORTH data stack
+    LD   A,E         ; Use only the lower byte
+    OUT  (PSG_VAL),A ; Set selected PSG register value
+    FORTHreturn      ; Return to FORTH
+
+;-------------------------------
+; PSG@ ( reg -- c )
+;-------------------------------
+; Read PSG register 'reg' contents
+psgrName:
+    .DC    "PSG@"     ; Name Fieldh (DC sets bit 7 of last char)
+    .WORD  psgwLink   ; Link Field: previous defined word in vocabulary
+psgrLink:
+    .BYTE  $ - psgrName - 2  ; Name Length Field
+    .WORD  $ + 2             ; Code Field
+    ;----------
+    FORTHpop         ; Pop DE from FORTH data stack
+    LD   A,E         ; Use only the lower byte
+    OUT  (PSG_REG),A ; Select PSG register
+    IN   A,(PSG_VAL) ; Read selected PSG register
+    LD   E,A         ; Data is a single byte
+    XOR  A           ; Clear D
+    LD   D,A
+    FORTHpush        ; Push DE to FORTH data stack
+    FORTHreturn      ; Return to FORTH
+
+;-------------------------------
+; MPAGE ( c -- )
+;-------------------------------
+; Select memory page 'c' , 0 to 3
+mpageName:
+    .DC    "MPAGE"    ; Name Fieldh (DC sets bit 7 of last char)
+    .WORD  psgrLink   ; Link Field: previous defined word in vocabulary
+mpageLink:
+    .BYTE  $ - mpageName - 2  ; Name Length Field
+    .WORD  $ + 2              ; Code Field
+    ;----------
+    LD    A,PSGportB   ; Select PSG Port B Register
+    OUT   (PSG_REG),A
+    IN    A,(PSG_VAL)  ; Read PSG Port B
+    AND   11111100b    ; mask out mem page bits
+    LD    C,A          ; save BORDER color, screen page and char set
+    
+    FORTHpop           ; Pop DE from FORTH data stack
+    LD    A,E          ; memory page
+    AND   00000011b    ; limit memory paging to 0..3
+    OR    C            ; combine with saved BORDER color, screen page and char set
+    OUT   (PSG_VAL),A  ; Write to PSG Port B
+    FORTHreturn        ; Return to FORTH
+
+;-------------------------------
+; SCREEN ( c --  )
+;-------------------------------
+; Select Screen page 'c' , 0 or 1
+screenName:
+    .DC    "SCREEN"   ; Name Fieldh (DC sets bit 7 of last char)
+    .WORD  mpageLink  ; Link Field: previous defined word in vocabulary
+screenLink:
+    .BYTE  $ - screenName - 2  ; Name Length Field
+    .WORD  $ + 2               ; Code Field
+    ;----------
+    LD   A,PSGportB   ; Select PSG Port B Register
+    OUT  (PSG_REG),A
+    IN   A,(PSG_VAL)  ; Read PSG Port B value
+    AND  11111011b    ; mask out Screen page bit 
+    LD   C,A          ; save BORDER color, memory and char set paging
+    
+    FORTHpop          ; Pop DE from FORTH data stack
+    LD   A,E          ; screen page
+    AND  00000001b    ; limit Screen page to 0 or 1
+    SLA  A            ; move to bit-2 position
+    SLA  A
+    OR   C            ; combine with saved BORDER color, memory page and char set
+    OUT  (PSG_VAL),A  ; Write to PSG Port B
+    FORTHreturn       ; Return to FORTH
+
+;-------------------------------
+; FONT ( c --  )
+;-------------------------------
+; Select character set 'c' , 0 or 1
+fontName:
+    .DC    "FONT"     ; Name Fieldh (DC sets bit 7 of last char)
+    .WORD  screenLink ; Link Field: previous defined word in vocabulary
+fontLink:
+    .BYTE  $ - fontName - 2  ; Name Length Field
+    .WORD  $ + 2             ; Code Field
+    ;----------
+    LD   A,PSGportB   ; Select PSG Port B Register
+    OUT  (PSG_REG),A
+    IN   A,(PSG_VAL)  ; Read PSG Port B value
+    AND  11110111b    ; mask out char set bit 
+    LD   C,A          ; save BORDER color, memory and screen pages
+    
+    FORTHpop          ; Pop DE from FORTH data stack
+    LD   A,E          ; character set
+    AND  00000001b    ; limit Character Set paging to 0 or 1
+    SLA  A            ; move to bit-3 position
+    SLA  A
+    SLA  A
+    OR   C            ; combine with saved BORDER color, memory and screen pages
+    OUT  (PSG_VAL),A  ; Write to PSG Port B
+    FORTHreturn       ; Return to FORTH
+
+;-------------------------------
+; BAUD ( n --  )
+;-------------------------------
+; Initialize UART with baud rate 'n'
+baudName:
+    .DC    "BAUD"    ; Name Fieldh (DC sets bit 7 of last char)
+    .WORD  fontLink  ; Link Field: previous defined word in vocabulary
+baudLink:
+    .BYTE  $ - baudName - 2  ; Name Length Field
+    .WORD  CF_DO_COLON       ; Code Field
+    ;----------
+	.WORD  F_STK_BYTE   ; 10
+	.BYTE  10
+	.WORD  F_DIV        ; /
+	.WORD  F_STK_WORD   ; 23040
+    .WORD  23040
+    .WORD  F_SWAP       ; SWAP	
+    .WORD  F_DIV        ; /  (result is baud divider)
+	.WORD  DOCODE       ; execute following Asm code
+	CALL   forthPopBC   ; BC = UART Baud rate divisor
+	CALL   UartSet      ; UART setup
+    FORTHreturn         ; Return back to FORTH
+
+;-------------------------------
+; TX ( addr n --  )
+;-------------------------------
+; Transmit 'n' bytes from 'addr' to serial line
+txName:
+    .DC    "TX"      ; Name Fieldh (DC sets bit 7 of last char)
+    .WORD  baudLink  ; Link Field: previous defined word in vocabulary
+txLink:
+    .BYTE  $ - txName - 2  ; Name Length Field
+    .WORD  $ + 2           ; Code Field
+    ;----------
+	CALL   forthPopBC      ; pop BC = 'n' from Data Stack
+	FORTHpop               ; pop DE = 'addr' from data stack
+	EX     DE,HL           ; HL = 'addr'
+	LD     D,B             ; DE = 'n'
+	LD     E,C
+	CALL   UartTx          ; Transmit Data Block
+    FORTHreturn            ; Return back to FORTH
+
+;-------------------------------
+; RX ( addr n --  )
+;-------------------------------
+; Receive 'n' bytes from serial line to memory 'addr'
+rxName:
+    .DC    "RX"    ; Name Fieldh (DC sets bit 7 of last char)
+    .WORD  txLink  ; Link Field: previous defined word in vocabulary
+rxLink:
+    .BYTE  $ - rxName - 2  ; Name Length Field
+    .WORD  $ + 2           ; Code Field
+    ;----------
+	CALL   forthPopBC      ; pop BC = 'n' from Data Stack
+    FORTHpop               ; pop DE = 'addr' from Data Stack
+	EX     DE,HL           ; HL = 'addr'
+	LD     D,B             ; DE = 'n'
+	LD     E,C
+	CALL   UartRx          ; Receive Data Block
+    FORTHreturn            ; Return back to FORTH
+	
+;-------------------------------
+; BORDER ( c --  )
+;-------------------------------
+; Set screen BORDER to color 'c' , 0 to 15
+borderName:
+    .DC    "BORDER"  ; Name Fieldh (DC sets bit 7 of last char)
+    .WORD  rxLink    ; Link Field: previous defined word in vocabulary
+borderLink:
+    .BYTE  $ - borderName - 2  ; Name Length Field
+    .WORD  $ + 2               ; Code Field
+    ;----------
+    LD   A,PSGportB   ; Select PSG Port B Register
+    OUT  (PSG_REG),A
+    IN   A,(PSG_VAL)  ; Read PSG Port B value
+    AND  00001111b    ; mask out BORDER color
+    LD   C,A          ; save memory and screen pages and char set
+    
+    FORTHpop          ; Pop DE from FORTH data stack
+    LD   A,E          ; BORDER color
+    SLA  A            ; position BORDER color at the higher 4 bits
+    SLA  A            ; (also limits BORDER color to 0..15)
+    SLA  A
+    SLA  A
+    OR   C            ; combine with saved memory and screen pages and char set
+    OUT  (PSG_VAL),A  ; Write back to Port A
+    FORTHreturn       ; Return back to FORTH
+	
+;-------------------------------
+; INK ( c -- )
+;-------------------------------
+; Set character INK (foreground) to color 'c' , 0 to 15
+inkName:
+    .DC    "INK"       ; Name Fieldh (DC sets bit 7 of last char)
+    .WORD  borderLink  ; Link Field: previous defined word in vocabulary
+inkLink:
+    .BYTE  $ - inkName - 2  ; Name Length Field
+    .WORD  $ + 2            ; Code Field
+    ;----------
+    LD   A,PSGportA   ; Select PSG Port A Register
+    OUT  (PSG_REG),A
+    IN   A,(PSG_VAL)  ; Read PSG Port A value
+    AND  11110000b    ; mask out current INK color
+    LD   C,A          ; save PAPER color
+    
+    FORTHpop          ; Pop DE from FORTH data stack
+    LD   A,E          ; INK color
+    AND  00001111b    ; limit INK color to 0..15
+    OR   C            ; combine with saved PAPER color
+    OUT  (PSG_VAL),A  ; Write back to Port A
+    FORTHreturn       ; Return back to FORTH
+
+;-------------------------------
+; PAPER ( c -- )
+;-------------------------------
+; Set character PAPER (background) color to 'c' , 0 to 15
+paperName:
+    .DC    "PAPER"    ; Name Fieldh (DC sets bit 7 of last char)
+    .WORD  inkLink    ; Link Field: previous defined word in vocabulary
+paperLink:
+    .BYTE  $ - paperName - 2  ; Name Length Field
+    .WORD  $ + 2              ; Code Field
+    ;----------
+    LD   A,PSGportA   ; Select PSG Port A Register
+    OUT  (PSG_REG),A
+    IN   A,(PSG_VAL)  ; Read PSG Port A value
+    AND  00001111b    ; mask out current PAPER color, preserving INK color
+    LD   C,A          ; save INK color
+    
+    FORTHpop          ; Pop DE from FORTH data stack
+    LD   A,E          ; PAPER color
+    SLA  A            ; position PAPER color at the higher 4 bits
+    SLA  A            ; (also limits PAPER color to 0..15)
+    SLA  A
+    SLA  A
+    OR   C            ; combine with saved INK color
+    OUT  (PSG_VAL),A  ; Write back to Port A
+    FORTHreturn       ; Return back to FORTH
+
+;-------------------------------
+; BLACK ( -- c )
+;-------------------------------
+blackName:
+    .DC    "BLACK"    ; Name Fieldh (DC sets bit 7 of last char)
+    .WORD  paperLink  ; Link Field: previous defined word in vocabulary
+blackLink:
+    .BYTE  $ - blackName - 2  ; Name Length Field
+    .WORD  $ + 2              ; Code Field
+    ;----------
+	LD    E,0                 ; Black color
+stackByte:
+    LD    D,0                 ; Clear High byte
+	FORTHpush                 ; Push DE to FORTH data stack
+    FORTHreturn               ; Return back to FORTH
+
+;-------------------------------
+; GREY ( -- c )
+;-------------------------------
+; 8 CONSTANT
+greyName:
+    .DC    "GREY"     ; Name Fieldh (DC sets bit 7 of last char)
+    .WORD  blackLink  ; Link Field: previous defined word in vocabulary
+greyLink:
+    .BYTE  $ - greyName - 2  ; Name Length Field
+    .WORD  $ + 2             ; Code Field
+    ;----------
+    LD    E,1000b            ; Grey color
+	JP    stackByte
+
+;-------------------------------
+; BLUE ( -- c )
+;-------------------------------
+blueName:
+    .DC    "BLUE"     ; Name Fieldh (DC sets bit 7 of last char))
+    .WORD  greyLink   ; Link Field: previous defined word in vocabulary
+blueLink:
+    .BYTE  $ - blueName - 2  ; Name Length Field
+    .WORD  $ + 2             ; Code Field
+    ;----------
+    LD    E,1001b            ; Blue color
+	JP    stackByte
+
+;-------------------------------
+; GREEN ( -- c )
+;-------------------------------
+greenName:
+    .DC    "GREEN"    ; Name Fieldh (DC sets bit 7 of last char)
+    .WORD  blueLink   ; Link Field: previous defined word in vocabulary
+greenLink:
+    .BYTE  $ - greenName - 2  ; Name Length Field
+    .WORD  $ + 2              ; Code Field
+    ;----------
+    LD    E,1010b             ; Green color
+	JP    stackByte
+
+;-------------------------------
+; CYAN ( -- c )
+;-------------------------------
+cyanName:
+    .DC    "CYAN"     ; Name Fieldh (DC sets bit 7 of last char)
+    .WORD  greenLink  ; Link Field: previous defined word in vocabulary
+cyanLink:
+    .BYTE  $ - cyanName - 2  ; Name Length Field
+    .WORD  $ + 2             ; Code Field
+    ;----------
+    LD    E,1011b            ; Cyan color
+	JP    stackByte
+
+;-------------------------------
+; RED ( -- c )
+;-------------------------------
+redName:
+    .DC    "RED"      ; Name Fieldh (DC sets bit 7 of last char)
+    .WORD  cyanLink   ; Link Field: previous defined word in vocabulary
+redLink:
+    .BYTE  $ - redName - 2  ; Name Length Field
+    .WORD  $ + 2            ; Code Field
+    ;----------
+    LD    E,1100b           ; Red color
+	JP    stackByte
+
+;-------------------------------
+; PURPLE ( -- c )
+;-------------------------------
+purpleName:
+    .DC    "PURPLE"  ; Name Fieldh (DC sets bit 7 of last char)
+    .WORD  redLink   ; Link Field: previous defined word in vocabulary
+purpleLink:
+    .BYTE  $ - purpleName - 2  ; Name Length Field
+    .WORD  $ + 2               ; Code Field
+    ;----------
+    LD    E,1101b              ; Purple color
+	JP    stackByte
+
+;-------------------------------
+; YELLOW ( -- c )
+;-------------------------------
+yellowName:
+    .DC    "YELLOW"    ; Name Fieldh (DC sets bit 7 of last char)
+    .WORD  purpleLink  ; Link Field: previous defined word in vocabulary
+yellowLink:
+    .BYTE  $ - yellowName - 2  ; Name Length Field
+    .WORD  $ + 2               ; Code Field
+    ;----------
+    LD    E,1110b              ; Yellow color
+	JP    stackByte
+
+;-------------------------------
+; WHITE ( -- c )
+;-------------------------------
+whiteName:
+    .DC    "WHITE"     ; Name Fieldh (DC sets bit 7 of last char)
+    .WORD  yellowLink  ; Link Field: previous defined word in vocabulary
+whiteLink:
+    .BYTE  $ - whiteName - 2  ; Name Length Field
+    .WORD  $ + 2              ; Code Field
+    ;----------
+    LD    E,1111b             ; White color
+	JP    stackByte
+
+;-------------------------------
+; DARK ( c1 -- c2 )
+;-------------------------------
+; Change color code on stack to darker tone
+darkName:
+    .DC    "DARK"     ; Name Fieldh (DC sets bit 7 of last char)
+    .WORD  whiteLink  ; Link Field: previous defined word in vocabulary
+darkLink:
+    .BYTE  $ - darkName - 2  ; Name Length Field
+    .WORD  $ + 2             ; Code Field
+    ;----------
+    FORTHpop                 ; Pop from FORTH data stack to DE
+    LD    A,E                ; Get lower byte
+    AND   0111b              ; Clear intensity bit3
+    LD    E,A                ; Put it back in Data Stack
+    JP    stackByte
+
+;------------------------------------------------------------------------------
+; XDICT Subroutines -----------------------------------------------------------
+;------------------------------------------------------------------------------
+; Serial Interface  (UART 16C450) routines
+	
+;-------------------------------
+; UART Inititalization: 8 data bits, 1 stop bit, no parity
+;   Input: BC = Baud rate divisor
+; Affects: A
+; Baud rate divisor = 3,686,400 / (16 * baud rate)
+;    Baud: 300 | 1200 | 2400 | 3600 | 4800 | 9600 | 19200
+; Divisor: 768 |  192 |   96 |   64 |   48 |   24 |    12
+UartSet:                 
+    LD    A,$80        ; Set DLAB flag
+    OUT   (UART_LCR),A
+    LD    A,C          ; Set Baud Rate divisor (Less Significant Byte)
+    OUT   (UART_DLL),A
+    LD    A,B          ; Set Baud Rate divisor (Most Significant Byte)
+    OUT   (UART_DLM),A 
+    LD    A,$03        ; 8-bit data, 1 stop-bit, no parity, reset DLAB flag
+    OUT   (UART_LCR),A
+    RET
+
+;-------------------------------
+; Check if UART exist by writing/reading scratch register
+; Output: A=0 and Z flag set only if UART exists
+; Affects: A 
+UartCheck:
+	LD    A,$AA             ; Test pattern 1
+	OUT   (UART_SCR),A      ; Write test bits to Scratch register
+	IN    A,(UART_SCR)      ; Read it back
+	XOR   $AA               ; If success, A=0 and Z flag is set
+	JR    NZ,UartCheckExit  ; Fail, get out
+	LD    A,$55             ; Test pattern 2
+	OUT   (UART_SCR),A      ; Write test bits to Scratch register
+	IN    A,(UART_SCR)      ; Read it back
+	XOR   $55               ; If success, A=0 and Z flag is set	
+UartCheckExit:
+	RET
+	
+;-------------------------------
+; Receive bytes from serial line
+; Input: HL = destination memory block
+;        BC = bytes to receive
+UartRx:
+	CALL  UartCheck      ; Check if UART exist
+	JR    NZ,UartExit    ; UART does not exist, abort
+UartRxWait:
+    CALL  scanKbrd       ; Wait release all keys
+    AND   A
+	JR    NZ,UartRxWait
+
+	DI                   ; Avoid interrupts
+UartRxLoop:
+    LD   BC,$7FFE        ; Check for Break Key (space scan group)
+    IN   A,(C)           ; Space key is in $7FFE key group, bit-0
+	BIT  0,A             ; Check for 'space' keypress
+	JR   Z,UartExit      ; 'space' key pressed , Abort
+
+    IN    A,(UART_LSR)   ; Read Line Status Register
+    BIT   0,A            ; check UART ready to receive flag
+    JR    Z,UartRxLoop   ; wait if not ready
+
+    IN    A,(UART_DATA)  ; Get received byte
+	LD    (HL),A         ; Store it in memory
+	INC   HL             ; Point to next receive memory position
+	DEC   DE             ; Countdown received bytes
+	LD    A,D            ; Last byte ?
+	OR    E
+	JR    NZ,UartRxLoop  ; No, Receive next byte
+
+UartExit:
+    CALL  scanKbrd       ; Wait for key release
+    AND   A
+	JR    NZ,UartExit
+
+    EI                   ; Re-enable Interrupts
+    RET
+
+;-------------------------------
+; Transmit bytes over serial line
+; Input: HL = source memory block
+;        DE = bytes to transmit
+UartTx:
+	CALL  UartCheck      ; Check if UART exist
+	JR    NZ,UartExit    ; UART does not exist, abort
+UartTxWait:
+    CALL  scanKbrd       ; Wait release all keys
+    AND   A
+	JR    NZ,UartTxWait	
+	
+	DI                   ; Avoid Interrupts
+UartTxLoop:
+    LD   BC,$7FFE        ; Check for Break Key (space scan group)
+    IN   A,(C)           ; Space key is in $7FFE key group, bit-0
+	BIT  0,A             ; Check for 'space' keypress
+	JR   Z,UartExit      ; 'space' key pressed , Abort
+
+    IN   A,(UART_LSR)    ; Read Line Status Register
+	BIT  5,A             ; check UART ready to send flag
+	JR   Z,UartTxLoop    ; wait if not ready
+
+    LD    A,(HL)         ; Get byte to transmit	
+    OUT   (UART_DATA),A  ; Send byte
+    INC   HL             ; Point to next data byte
+	DEC   DE             ; Countdown bytes transmitted
+	LD    A,D            ; Last byte ?
+	OR    E
+	JR    NZ,UartTxLoop  ; No, Transmit next byte
+	
+	JP    UartExit       ; Exit
+
+;##############################################################################
+    .DEPHASE
+;##############################################################################
+dictExpEnd:
+
+;==============================================================================
+; Alternate Character Set =====================================================
+;==============================================================================
+charSet:
+    .BYTE   000h, 000h, 000h, 000h, 000h, 000h, 000h, 000h  ; blank
+    .BYTE   00Fh, 00Fh, 00Fh, 00Fh, 000h, 000h, 000h, 000h  ; graphic 1
+    .BYTE   0F0h, 0F0h, 0F0h, 0F0h, 000h, 000h, 000h, 000h  ; graphic 2
+    .BYTE   0FFh, 0FFh, 0FFh, 0FFh, 000h, 000h, 000h, 000h  ; graphic 3
+    .BYTE   000h, 000h, 000h, 000h, 00Fh, 00Fh, 00Fh, 00Fh  ; graphic 4
+    .BYTE   00Fh, 00Fh, 00Fh, 00Fh, 00Fh, 00Fh, 00Fh, 00Fh  ; graphic 5
+    .BYTE   0F0h, 0F0h, 0F0h, 0F0h, 00Fh, 00Fh, 00Fh, 00Fh  ; graphic 6
+    .BYTE   0FFh, 0FFh, 0FFh, 0FFh, 00Fh, 00Fh, 00Fh, 00Fh  ; graphic 7
+    .BYTE   000h, 000h, 000h, 000h, 000h, 000h, 000h, 000h  ; blank
+    .BYTE   00Fh, 00Fh, 00Fh, 00Fh, 000h, 000h, 000h, 000h  ; graphic 1
+    .BYTE   0F0h, 0F0h, 0F0h, 0F0h, 000h, 000h, 000h, 000h  ; graphic 2
+    .BYTE   0FFh, 0FFh, 0FFh, 0FFh, 000h, 000h, 000h, 000h  ; graphic 3
+    .BYTE   000h, 000h, 000h, 000h, 00Fh, 00Fh, 00Fh, 00Fh  ; graphic 4
+    .BYTE   00Fh, 00Fh, 00Fh, 00Fh, 00Fh, 00Fh, 00Fh, 00Fh  ; graphic 5
+    .BYTE   0F0h, 0F0h, 0F0h, 0F0h, 00Fh, 00Fh, 00Fh, 00Fh  ; graphic 6
+    .BYTE   0FFh, 0FFh, 0FFh, 0FFh, 00Fh, 00Fh, 00Fh, 00Fh  ; graphic 7
+    
+    .BYTE   000h, 000h, 000h, 000h, 000h, 000h, 000h, 000h  ; blank
+    .BYTE   00Fh, 00Fh, 00Fh, 00Fh, 000h, 000h, 000h, 000h  ; graphic 1
+    .BYTE   0F0h, 0F0h, 0F0h, 0F0h, 000h, 000h, 000h, 000h  ; graphic 2
+    .BYTE   0FFh, 0FFh, 0FFh, 0FFh, 000h, 000h, 000h, 000h  ; graphic 3
+    .BYTE   000h, 000h, 000h, 000h, 00Fh, 00Fh, 00Fh, 00Fh  ; graphic 4
+    .BYTE   00Fh, 00Fh, 00Fh, 00Fh, 00Fh, 00Fh, 00Fh, 00Fh  ; graphic 5
+    .BYTE   0F0h, 0F0h, 0F0h, 0F0h, 00Fh, 00Fh, 00Fh, 00Fh  ; graphic 6
+    .BYTE   0FFh, 0FFh, 0FFh, 0FFh, 00Fh, 00Fh, 00Fh, 00Fh  ; graphic 7
+    .BYTE   000h, 000h, 000h, 000h, 000h, 000h, 000h, 000h  ; blank
+    .BYTE   00Fh, 00Fh, 00Fh, 00Fh, 000h, 000h, 000h, 000h  ; graphic 1
+    .BYTE   0F0h, 0F0h, 0F0h, 0F0h, 000h, 000h, 000h, 000h  ; graphic 2
+    .BYTE   0FFh, 0FFh, 0FFh, 0FFh, 000h, 000h, 000h, 000h  ; graphic 3
+    .BYTE   000h, 000h, 000h, 000h, 00Fh, 00Fh, 00Fh, 00Fh  ; graphic 4
+    .BYTE   00Fh, 00Fh, 00Fh, 00Fh, 00Fh, 00Fh, 00Fh, 00Fh  ; graphic 5
+    .BYTE   0F0h, 0F0h, 0F0h, 0F0h, 00Fh, 00Fh, 00Fh, 00Fh  ; graphic 6
+    .BYTE   0FFh, 0FFh, 0FFh, 0FFh, 00Fh, 00Fh, 00Fh, 00Fh  ; graphic 7
+    
+    .BYTE   000h, 000h, 000h, 000h, 000h, 000h, 000h, 000h  ; space
+    .BYTE   018h, 03Ch, 03Ch, 018h, 018h, 000h, 018h, 000h  ; !
+    .BYTE   036h, 036h, 036h, 000h, 000h, 000h, 000h, 000h  ; "
+    .BYTE   036h, 036h, 07Fh, 036h, 07Fh, 036h, 036h, 000h  ; #
+    .BYTE   018h, 03Eh, 060h, 03Ch, 006h, 07Ch, 018h, 000h  ; $
+    .BYTE   000h, 063h, 066h, 00Ch, 018h, 033h, 063h, 000h  ; %
+    .BYTE   01Ch, 036h, 01Ch, 03Bh, 06Eh, 066h, 03Bh, 000h  ; &
+    .BYTE   018h, 018h, 030h, 000h, 000h, 000h, 000h, 000h  ; '
+    .BYTE   00Ch, 018h, 030h, 030h, 030h, 018h, 00Ch, 000h  ; (
+    .BYTE   030h, 018h, 00Ch, 00Ch, 00Ch, 018h, 030h, 000h  ; )
+    .BYTE   000h, 066h, 03Ch, 0FFh, 03Ch, 066h, 000h, 000h  ; *
+    .BYTE   000h, 018h, 018h, 07Eh, 018h, 018h, 000h, 000h  ; +
+    .BYTE   000h, 000h, 000h, 000h, 000h, 018h, 018h, 030h  ; ,
+    .BYTE   000h, 000h, 000h, 07Eh, 000h, 000h, 000h, 000h  ; -
+    .BYTE   000h, 000h, 000h, 000h, 000h, 018h, 018h, 000h  ; .
+    .BYTE   006h, 00Ch, 018h, 030h, 060h, 0C0h, 080h, 000h  ; /
+    
+    .BYTE   03Eh, 063h, 067h, 06Fh, 07Bh, 073h, 03Eh, 000h  ; 0
+    .BYTE   018h, 038h, 018h, 018h, 018h, 018h, 07Eh, 000h  ; 1
+    .BYTE   03Ch, 066h, 006h, 01Ch, 030h, 066h, 07Eh, 000h  ; 2
+    .BYTE   03Ch, 066h, 006h, 01Ch, 006h, 066h, 03Ch, 000h  ; 3
+    .BYTE   00Eh, 01Eh, 036h, 066h, 07Fh, 006h, 00Fh, 000h  ; 4
+    .BYTE   07Eh, 060h, 07Ch, 006h, 006h, 066h, 03Ch, 000h  ; 5
+    .BYTE   01Ch, 030h, 060h, 07Ch, 066h, 066h, 03Ch, 000h  ; 6
+    .BYTE   07Eh, 066h, 006h, 00Ch, 018h, 018h, 018h, 000h  ; 7
+    .BYTE   03Ch, 066h, 066h, 03Ch, 066h, 066h, 03Ch, 000h  ; 8
+    .BYTE   03Ch, 066h, 066h, 03Eh, 006h, 00Ch, 038h, 000h  ; 9
+    .BYTE   000h, 018h, 018h, 000h, 000h, 018h, 018h, 000h  ; :
+    .BYTE   000h, 018h, 018h, 000h, 000h, 018h, 018h, 030h  ; ;
+    .BYTE   00Ch, 018h, 030h, 060h, 030h, 018h, 00Ch, 000h  ; <
+    .BYTE   000h, 000h, 07Eh, 000h, 07Eh, 000h, 000h, 000h  ; =
+    .BYTE   030h, 018h, 00Ch, 006h, 00Ch, 018h, 030h, 000h  ; >
+    .BYTE   03Ch, 066h, 006h, 00Ch, 018h, 000h, 018h, 000h  ; ?
+    
+    .BYTE   03Eh, 063h, 06Fh, 06Fh, 06Fh, 060h, 03Ch, 000h  ; @
+    .BYTE   018h, 03Ch, 066h, 066h, 07Eh, 066h, 066h, 000h  ; A
+    .BYTE   07Eh, 033h, 033h, 03Eh, 033h, 033h, 07Eh, 000h  ; B
+    .BYTE   01Eh, 033h, 060h, 060h, 060h, 033h, 01Eh, 000h  ; C
+    .BYTE   07Ch, 036h, 033h, 033h, 033h, 036h, 07Ch, 000h  ; D
+    .BYTE   07Fh, 031h, 034h, 03Ch, 034h, 031h, 07Fh, 000h  ; E
+    .BYTE   07Fh, 031h, 034h, 03Ch, 034h, 030h, 078h, 000h  ; F
+    .BYTE   01Eh, 033h, 060h, 060h, 067h, 033h, 01Fh, 000h  ; G
+    .BYTE   066h, 066h, 066h, 07Eh, 066h, 066h, 066h, 000h  ; H
+    .BYTE   03Ch, 018h, 018h, 018h, 018h, 018h, 03Ch, 000h  ; I
+    .BYTE   00Fh, 006h, 006h, 006h, 066h, 066h, 03Ch, 000h  ; J
+    .BYTE   073h, 033h, 036h, 03Ch, 036h, 033h, 073h, 000h  ; K
+    .BYTE   070h, 030h, 030h, 030h, 031h, 033h, 07Fh, 000h  ; L
+    .BYTE   063h, 077h, 07Fh, 07Fh, 06Bh, 063h, 063h, 000h  ; M
+    .BYTE   063h, 073h, 07Bh, 06Fh, 067h, 063h, 063h, 000h  ; N
+    .BYTE   01Ch, 036h, 063h, 063h, 063h, 036h, 01Ch, 000h  ; O
+    
+    .BYTE   07Eh, 033h, 033h, 03Eh, 030h, 030h, 078h, 000h  ; P
+    .BYTE   03Ch, 066h, 066h, 066h, 066h, 06Eh, 03Ch, 00Eh  ; Q
+    .BYTE   07Eh, 033h, 033h, 03Eh, 036h, 033h, 073h, 000h  ; R
+    .BYTE   03Ch, 066h, 070h, 038h, 00Eh, 066h, 03Ch, 000h  ; S
+    .BYTE   07Eh, 05Ah, 018h, 018h, 018h, 018h, 03Ch, 000h  ; T
+    .BYTE   066h, 066h, 066h, 066h, 066h, 066h, 07Eh, 000h  ; U
+    .BYTE   066h, 066h, 066h, 066h, 066h, 03Ch, 018h, 000h  ; V
+    .BYTE   063h, 063h, 063h, 06Bh, 07Fh, 077h, 063h, 000h  ; W
+    .BYTE   063h, 063h, 036h, 01Ch, 01Ch, 036h, 063h, 000h  ; X
+    .BYTE   066h, 066h, 066h, 03Ch, 018h, 018h, 03Ch, 000h  ; Y
+    .BYTE   07Fh, 063h, 046h, 00Ch, 019h, 033h, 07Fh, 000h  ; Z
+    .BYTE   03Ch, 030h, 030h, 030h, 030h, 030h, 03Ch, 000h  ; [
+    .BYTE   060h, 030h, 018h, 00Ch, 006h, 003h, 001h, 000h  ; \
+    .BYTE   03Ch, 00Ch, 00Ch, 00Ch, 00Ch, 00Ch, 03Ch, 000h  ; ]
+    .BYTE   008h, 01Ch, 036h, 063h, 000h, 000h, 000h, 000h  ; ^
+    .BYTE   000h, 000h, 000h, 000h, 000h, 000h, 000h, 0FFh  ; underline
+    
+    .BYTE   018h, 018h, 00Ch, 000h, 000h, 000h, 000h, 000h  ; `
+    .BYTE   000h, 000h, 03Ch, 006h, 03Eh, 066h, 03Bh, 000h  ; a
+    .BYTE   070h, 030h, 030h, 03Eh, 033h, 033h, 06Eh, 000h  ; b
+    .BYTE   000h, 000h, 03Ch, 066h, 060h, 066h, 03Ch, 000h  ; c
+    .BYTE   00Eh, 006h, 006h, 03Eh, 066h, 066h, 03Bh, 000h  ; d
+    .BYTE   000h, 000h, 03Ch, 066h, 07Eh, 060h, 03Ch, 000h  ; e
+    .BYTE   01Ch, 036h, 030h, 078h, 030h, 030h, 078h, 000h  ; f
+    .BYTE   000h, 000h, 03Bh, 066h, 066h, 03Eh, 006h, 07Ch  ; g
+    .BYTE   070h, 030h, 036h, 03Bh, 033h, 033h, 073h, 000h  ; h
+    .BYTE   018h, 000h, 038h, 018h, 018h, 018h, 03Ch, 000h  ; i
+    .BYTE   006h, 000h, 006h, 006h, 006h, 066h, 066h, 03Ch  ; j
+    .BYTE   070h, 030h, 033h, 036h, 03Ch, 036h, 073h, 000h  ; k
+    .BYTE   038h, 018h, 018h, 018h, 018h, 018h, 03Ch, 000h  ; l
+    .BYTE   000h, 000h, 066h, 07Fh, 07Fh, 06Bh, 063h, 000h  ; m
+    .BYTE   000h, 000h, 07Ch, 066h, 066h, 066h, 066h, 000h  ; n
+    .BYTE   000h, 000h, 03Ch, 066h, 066h, 066h, 03Ch, 000h  ; o
+    
+    .BYTE   000h, 000h, 06Eh, 033h, 033h, 03Eh, 030h, 078h  ; p
+    .BYTE   000h, 000h, 03Bh, 066h, 066h, 03Eh, 006h, 00Fh  ; q
+    .BYTE   000h, 000h, 06Eh, 03Bh, 033h, 030h, 078h, 000h  ; r
+    .BYTE   000h, 000h, 03Eh, 060h, 03Ch, 006h, 07Ch, 000h  ; s
+    .BYTE   008h, 018h, 03Eh, 018h, 018h, 01Ah, 00Ch, 000h  ; t
+    .BYTE   000h, 000h, 066h, 066h, 066h, 066h, 03Bh, 000h  ; u
+    .BYTE   000h, 000h, 066h, 066h, 066h, 03Ch, 018h, 000h  ; v
+    .BYTE   000h, 000h, 063h, 06Bh, 07Fh, 07Fh, 036h, 000h  ; w
+    .BYTE   000h, 000h, 063h, 036h, 01Ch, 036h, 063h, 000h  ; x
+    .BYTE   000h, 000h, 066h, 066h, 066h, 03Eh, 006h, 07Ch  ; y
+    .BYTE   000h, 000h, 07Eh, 04Ch, 018h, 032h, 07Eh, 000h  ; z
+    .BYTE   00Eh, 018h, 018h, 070h, 018h, 018h, 00Eh, 000h  ; {
+    .BYTE   018h, 018h, 018h, 018h, 018h, 018h, 018h, 000h  ; |
+    .BYTE   070h, 018h, 018h, 00Eh, 018h, 018h, 070h, 000h  ; }
+    .BYTE   03Bh, 06Eh, 000h, 000h, 000h, 000h, 000h, 000h  ; ~
+    .BYTE   07Eh, 081h, 09Dh, 0A1h, 0A1h, 09Dh, 081h, 07Eh  ; (c)
+charSetEnd:
+
+;==============================================================================
+    .END
