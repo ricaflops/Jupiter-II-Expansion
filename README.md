@@ -161,7 +161,7 @@ Note: System resets to page 3 to access expansion ROM immediatly
   R3 R2: ----tttt tttttttt : Tone generator B period (12-bits) 0-4095
   R5 R4: ----tttt tttttttt : Tone generator C period (12-bits) 0-4095
      R6:          ---ttttt : Noise generator period  (5-bits)  0-31
-     R7:          ppnnnABC : I/O port and sound channel enablers
+     R7:          ppcbaCBA : I/O port and sound channel enablers
      R8:          ---Mvvvv : Channel A Volume (v) and Envelope Mode (M)
      R9:          ---Mvvvv : Channel B Volume (v) and Envelope Mode (M)
     R10:          ---Mvvvv : Channel C Volume (v) and Envelope Mode (M)
