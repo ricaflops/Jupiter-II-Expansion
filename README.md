@@ -133,24 +133,11 @@ Avoid transfering to/from video RAM using video circuit priority addressing. Tha
 *Note: Character Generator RAM is write only*
 
 ### Memory Paging
-
+![Memry Paging](mem_paging.png)
 ```
 MPAGE  ( c -- ) Select memory page 'c' , 0 to 3
 SCREEN ( c -- ) Select Screen page 'c' , 0 or 1
 FONT   ( c -- ) Select character set 'c' , 0 or 1
-```
-
-```
-             Page 0    Page 1    Page 2    Page 3
-          +---------+---------+---------+---------+
-C000-FFFF |         |         |         | 16K ROM | 49152..65535
-          | 32K RAM | 32K RAM | 32K RAM +---------|
-8000-BFFF |         |         |         | 16K RAM | 32768..49151
-          |---------+---------+---------+---------|
-4000-7FFF |          16K RAM (not paged)          | 16384..32767
-          |---------------------------------------|
-0000-3FFF :        Unexpanded Jupiter-II          : 0..16383
-          +---------------------------------------+
 ```
 *Note: System resets to page 3*
 
