@@ -15,6 +15,9 @@
 ;   008E: C3 00 C0   JP $C000  ; Redirect to XROM code
 ;   0091: 00         NOP       ; ---
 
+    .z80
+	.TITLE XROM
+
 ;-----------------------------
 ; Memory Locations
 XROM        .EQU $C000  ; XROM image offset
@@ -55,7 +58,7 @@ PSGenable   .EQU 7      ; PSG Register: Output channel enables and I/O Ports dir
 PSGportA    .EQU 14     ; PSG Register: Port A (PAPAER and INK color)
 PSGportB    .EQU 15     ; PSG Register: Port B (BORDER color and Memory Paging)
 ;-----------------------------
-; some FORTH dictionary code fields
+; some of FORTH dictionary code fields
 F_HERE      .EQU $0460  ; HERE
 F_BASE      .EQU $048A  ; BASE
 F_SEMICOLON .EQU $04B6  ; ;
@@ -179,8 +182,10 @@ colorBarLoop:                   ; loop through the 16 colors
     PrintAt 22, 14, strYear     ; "2020"    at line 22, column 14
 ;----------------------------- Play Initialization Tone
     PSGset       203,  0        ; Tone A period = 1ms (1kHz)
-    PSGset 11111110b,  7        ; Tone A enabled at Channel A
+	PSGset       203,  2        ; Tone B period = 1ms (1kHz)
+    PSGset 11111100b,  7        ; Channels A & B tone enabled (Left & Right channels)
     PSGset        24,  8        ; Channel A Volume = 75%
+    PSGset        24,  9        ; Channel B Volume = 75%
     PSGset        25, 12        ; Envelope Period = 504 ms
     PSGset 00000001b, 13        ; Envelope ramps down one cycle
 ;----------------------------- Wait Keypress to clear screen
@@ -429,6 +434,9 @@ depthLink:
 ;     DROP DROP
 ;   THEN
 ; ;
+; ( Others )
+; SSAVE ( save dictionary over serial interface )
+; SLOAD ( load dictionary from serial interface )
 	
 ;-------------------------------
 ; HEX ( -- )
@@ -1109,10 +1117,10 @@ charSet:
     .BYTE   03Ch, 030h, 030h, 030h, 030h, 030h, 03Ch, 000h  ; [
     .BYTE   060h, 030h, 018h, 00Ch, 006h, 003h, 001h, 000h  ; \
     .BYTE   03Ch, 00Ch, 00Ch, 00Ch, 00Ch, 00Ch, 03Ch, 000h  ; ]
-    .BYTE   008h, 01Ch, 036h, 063h, 000h, 000h, 000h, 000h  ; ^
+    .BYTE   018h, 03Ch, 07Eh, 018h, 018h, 018h, 018h, 000h  ; ^
     .BYTE   000h, 000h, 000h, 000h, 000h, 000h, 000h, 0FFh  ; underline
     
-    .BYTE   018h, 018h, 00Ch, 000h, 000h, 000h, 000h, 000h  ; `
+    .BYTE   01Fh, 030h, 07Ch, 030h, 07Ch, 030h, 01Fh, 000h  ; Pound/Euro
     .BYTE   000h, 000h, 03Ch, 006h, 03Eh, 066h, 03Bh, 000h  ; a
     .BYTE   070h, 030h, 030h, 03Eh, 033h, 033h, 06Eh, 000h  ; b
     .BYTE   000h, 000h, 03Ch, 066h, 060h, 066h, 03Ch, 000h  ; c
@@ -1144,7 +1152,7 @@ charSet:
     .BYTE   018h, 018h, 018h, 018h, 018h, 018h, 018h, 000h  ; |
     .BYTE   070h, 018h, 018h, 00Eh, 018h, 018h, 070h, 000h  ; }
     .BYTE   03Bh, 06Eh, 000h, 000h, 000h, 000h, 000h, 000h  ; ~
-    .BYTE   07Eh, 081h, 09Dh, 0A1h, 0A1h, 09Dh, 081h, 07Eh  ; (c)
+    .BYTE   03Ch, 042h, 099h, 0A1h, 0A1h, 099h, 042h, 03Ch  ; (c)
 charSetEnd:
 
 ;==============================================================================
