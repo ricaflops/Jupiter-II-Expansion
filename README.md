@@ -133,12 +133,12 @@ Avoid transfering to/from video RAM using video circuit priority addressing. Tha
 *Note: Character Generator RAM is write only*
 
 ### Memory Paging
-![Memry Paging](mem_paging.png)
 ```
 MPAGE  ( c -- ) Select memory page 'c' , 0 to 3
 SCREEN ( c -- ) Select Screen page 'c' , 0 or 1
 FONT   ( c -- ) Select character set 'c' , 0 or 1
 ```
+![Memry Paging](mem_paging.png)
 *Note: System resets to page 3*
 
 ## Programmable Sound Generator Registers
