@@ -194,20 +194,4 @@ R12 R11: tttttttt tttttttt : Envelope period (16-bits) 0-65535
 - Port A (register 14) controls PAPER and INK colors
 - Port B (register 15) controls BORDER color and paging<br/>
 
-```
- ______Port A_____    ______Port B_____
-| 7 6 5 4 3 2 1 0 |  | 7 6 5 4 3 2 1 0 |
-| I R G B I R G B |  | I R G B C S M M |
-|  PAPER |  INK   |  | BORDER | Paging |
-```
-
-*Color bits:* 
-- I=Intensity
-- R=Red
-- G=Green
-- B=Blue components<br/>
-
-*Paging bits:*
-- C = Character set 0 or 1 
-- S = Screen page 0 or 1 
-- MM = Memory page 0..3<br/>
+![Programmable Sound Generator Ports](psg_io-ports.png)
