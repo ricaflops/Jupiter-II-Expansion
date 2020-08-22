@@ -65,8 +65,7 @@ COLORBAR ( Show a colorfull bar )
 8 data bits, 1 stop bit, no parity.
 ```
 CREATE BUFFER 256 ALLOT ( Create and Allocate a memory space to work )
-( Add some testing words )
-: CLRBUF 256 0 DO 32 BUFFER I + C! LOOP ; ( Clear Buffer )
+: CLRBUF BUFFER 256 32 FILL ; ( Clear Buffer )
 : PRTBUF CR 256 0 DO BUFFER I + EMIT LOOP CR ; ( Print Buffer )
 
 9600 BAUD     ( set communication baud rate )
@@ -75,7 +74,7 @@ BUFFER 256 RX ( Receive 256 bytes from serial line )
 PRTBUF        ( View received data )
 BUFFER 256 TX ( Transmit 256 bytes over serial line )
 ```
-Note: use Space key to abort communication if needed.
+*Note: use Space key to abort communication if needed*
 
 # Extra FORTH vocabulary
 The extended vocabulary is copied from XROM to a unused 1K RAM area at $3000-$33FF of Jupiter-II during initialization.
@@ -131,7 +130,7 @@ Avoid transfering to/from video RAM using video circuit priority addressing. Tha
 - Video RAM from $2400 to $27FF. Use mirror addressing $2000 to $23FF instead (CPU priority).
 - Character Genrator RAM from $2C00 to $2FFF. Use mirror addressing $2800 to $2BFF instead (CPU priority).
 
-Note: Character Generator RAM is write only.
+*Note: Character Generator RAM is write only*
 
 ### Memory Paging
 
@@ -153,7 +152,7 @@ C000-FFFF |         |         |         | 16K ROM | 49152..65535
 0000-3FFF :        Unexpanded Jupiter-II          : 0..16383
           +---------------------------------------+
 ```
-Note: System resets to page 3 to access expansion ROM immediatly
+*Note: System resets to page 3*
 
 ## Programmable Sound Generator Registers
 ![Programmable Sound Generator Registers](psg_registers.png)
