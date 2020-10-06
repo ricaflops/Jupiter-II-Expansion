@@ -581,21 +581,6 @@ F 3 "~" H 8650 10500 50  0001 C CNN
 	1    0    0    -1  
 $EndComp
 $Comp
-L Jupiter-Ace+-rescue:GAL22V10-rfl_pld U?
-U 1 1 5E9E8CDF
-P 5800 2100
-AR Path="/5C72F810/5E9E8CDF" Ref="U?"  Part="1" 
-AR Path="/5C8BA3E4/5E9E8CDF" Ref="U?"  Part="1" 
-AR Path="/5E9E8CDF" Ref="U1"  Part="1" 
-AR Path="/5E8292A6/5E9E8CDF" Ref="U?"  Part="1" 
-F 0 "U1" H 5950 2850 50  0000 C CNN
-F 1 "GAL22V10" V 5800 2100 50  0000 C CNN
-F 2 "Package_DIP:DIP-24_W7.62mm_Socket" H 5850 2050 60  0001 C CNN
-F 3 "" H 5850 2050 60  0001 C CNN
-	1    5800 2100
-	1    0    0    -1  
-$EndComp
-$Comp
 L power:+5V #PWR?
 U 1 1 5F0AD967
 P 5800 1200
@@ -2386,9 +2371,20 @@ Wire Wire Line
 	13850 3050 13900 3050
 Wire Wire Line
 	13700 3050 13850 3050
+Connection ~ 13850 3050
 Wire Bus Line
 	7000 5200 7000 6400
 Wire Bus Line
 	7200 5050 7200 6000
-Connection ~ 13850 3050
+$Comp
+L rfl_pld:GAL22V10 U1
+U 1 1 5F8C823C
+P 5800 2100
+F 0 "U1" H 5950 2850 50  0000 C CNN
+F 1 "GAL22V10" V 5800 2100 50  0000 C CNN
+F 2 "" H 5850 2050 60  0000 C CNN
+F 3 "" H 5850 2050 60  0000 C CNN
+	1    5800 2100
+	1    0    0    -1  
+$EndComp
 $EndSCHEMATC
